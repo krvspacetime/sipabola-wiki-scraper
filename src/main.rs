@@ -1,6 +1,10 @@
 use anyhow::Context;
 use serde::Serialize;
-use std::{fs::File, io::BufWriter};
+use std::{
+    fs::{self, File},
+    io::BufWriter,
+    path::Path,
+};
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct MatchRecord {
@@ -112,7 +116,7 @@ impl MatchRecordBuilder {
     }
 }
 
-const OUTPUT_PATH: &str = "output.json";
+const OUTPUT_PATH: &str = "out/output.json";
 
 fn main() -> anyhow::Result<()> {
     let config = Config::load()?;
@@ -129,6 +133,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+// ============ config ============
 const DEFAULT_YEAR_HEADER_CLASS: &str = "mw-heading3";
 const DEFAULT_EVENT_HEADER_CLASS: &str = "vevent";
 
@@ -161,6 +166,8 @@ impl Config {
     }
 }
 
+// ============ fetcher ============
+
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RustScraper";
 
 pub fn fetch_html(url: &str) -> anyhow::Result<String> {
@@ -172,6 +179,8 @@ pub fn fetch_html(url: &str) -> anyhow::Result<String> {
         .text()?;
     Ok(html)
 }
+
+// ============ parser ============
 
 use scraper::{ElementRef, Html, Selector};
 
@@ -238,8 +247,14 @@ fn parse_event_block(node: ElementRef, year: &str) -> Option<MatchRecord> {
         return None;
     }
 
+    let raw_date_and_comp_name_vec = first_row_cells[0].text().collect::<Vec<_>>();
+    let raw_date = raw_date_and_comp_name_vec[0].trim().to_string();
+    let comp_name = raw_date_and_comp_name_vec[1..].join(" ").trim().to_string();
+    let full_date = format!("{}, {}", raw_date, year);
     let mut builder = MatchRecord::builder(year)
-        .raw_date(cell_text(&first_row_cells[0]))
+        .raw_date(raw_date)
+        .competition(comp_name)
+        .full_date(full_date)
         .home_team(cell_text(&first_row_cells[1]))
         .score(cell_text(&first_row_cells[2]))
         .away_team(cell_text(&first_row_cells[3]));
@@ -278,9 +293,17 @@ fn non_empty_cell(cells: &[ElementRef], index: usize) -> Option<String> {
     cells.get(index).map(cell_text).filter(|s| !s.is_empty())
 }
 
+// ============ writer ============
+
 pub fn write_json(records: &[MatchRecord], path: &str) -> anyhow::Result<()> {
+    let path = Path::new(path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
     let file = File::create(path)?;
     let writer = BufWriter::new(file);
     serde_json::to_writer_pretty(writer, records)?;
+
     Ok(())
 }
