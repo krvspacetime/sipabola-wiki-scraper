@@ -8,13 +8,14 @@ use crate::{
     config::Config,
     fetcher::fetch_html,
     models::MatchRecord,
-    parser::{ScraperConfig, scrape_matches},
+    wiki_scraper::{ScraperConfig, scrape_matches},
 };
 
 mod config;
 mod fetcher;
 mod models;
 mod parser;
+mod wiki_scraper;
 
 const OUTPUT_PATH: &str = "out/output.json";
 

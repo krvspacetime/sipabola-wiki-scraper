@@ -1,6 +1,7 @@
 use scraper::{ElementRef, Html, Selector};
 
-use crate::models::{MatchRecord, MatchScoreRecord};
+use crate::models::{MatchRecord};
+use crate::parser::{clean_city_country, parse_match_score, parse_stadium_details};
 
 pub struct ScraperConfig {
     pub year_header_class: String,
@@ -87,8 +88,8 @@ fn scrape_event_block(node: ElementRef, year: &str) -> Option<MatchRecord> {
         }
     }
 
-    // Direct parser delegation to the models layer:
-    let score_record = MatchScoreRecord::parse(
+    // Call out to our parser module to build the structured scoreline
+    let score_record = parse_match_score(
         &raw_score,
         &home_name,
         &away_name,
@@ -104,13 +105,21 @@ fn scrape_event_block(node: ElementRef, year: &str) -> Option<MatchRecord> {
         .away_team(away_name)
         .score(score_record);
 
-    if let Some(city) = first_row_cells.get(4) {
-        builder = builder.city_country(city);
+    // Row 1 Column 4 typically holds City/Country.
+    // We clean up spacing errors like "Phnom Penh , Cambodia" here.
+    if let Some(city_raw) = first_row_cells
+        .get(4)
+        .map(cell_text)
+        .filter(|s| !s.is_empty())
+    {
+        let clean_city = clean_city_country(&city_raw);
+        builder = builder.city_country(clean_city);
     }
 
+    // Row 2 Column 4 typically holds Stadium and Attendance.
     if let Some(raw_stadium) = stadium_raw {
-        // Builder delegation for Stadium text parsing:
-        builder = builder.raw_stadium(&raw_stadium);
+        let (stadium, attendance) = parse_stadium_details(&raw_stadium);
+        builder = builder.stadium(stadium).attendance(attendance);
     }
 
     Some(builder.build())
