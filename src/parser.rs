@@ -1,9 +1,12 @@
 use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
 
-use crate::models::{GoalDetail, MatchRecord, MatchScoreRecord, TeamScoreDetail};
+use crate::models::{GoalDetail, MatchRecord, MatchScoreRecord};
 
-// ============ parser helpers ============
+pub struct ParserConfig {
+    pub year_header_class: String,
+    pub event_header_class: String,
+}
 
 fn clean_text(text: &str) -> String {
     let re_citations = Regex::new(r"\[\d+\]").unwrap();
@@ -19,31 +22,8 @@ fn cell_text(cell: &ElementRef) -> String {
     cell.text().collect::<Vec<_>>().join(" ").trim().to_string()
 }
 
-// Joins cells with newlines to preserve scorers lines
-fn cell_text_multiline(cell: &ElementRef) -> String {
-    cell.text()
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim()
-        .to_string()
-}
-
 fn non_empty_cell(cells: &[ElementRef], index: usize) -> Option<String> {
     cells.get(index).map(cell_text).filter(|s| !s.is_empty())
-}
-
-fn non_empty_cell_multiline(cells: &[ElementRef], index: usize) -> Option<String> {
-    cells
-        .get(index)
-        .map(cell_text_multiline)
-        .filter(|s| !s.is_empty())
-}
-
-// ============ parser core ============
-
-pub struct ParserConfig {
-    pub year_header_class: String,
-    pub event_header_class: String,
 }
 
 pub fn parse_matches(html: &str, config: &ParserConfig) -> anyhow::Result<Vec<MatchRecord>> {
@@ -112,8 +92,8 @@ fn parse_event_block(node: ElementRef, year: &str) -> Option<MatchRecord> {
     if let Some(second_row) = rows.get(1) {
         let second_row_cells: Vec<_> = second_row.select(&cell_selector).collect();
         if second_row_cells.len() >= 4 {
-            home_scorers_raw = non_empty_cell_multiline(&second_row_cells, 1);
-            away_scorers_raw = non_empty_cell_multiline(&second_row_cells, 3);
+            home_scorers_raw = non_empty_cell(&second_row_cells, 1);
+            away_scorers_raw = non_empty_cell(&second_row_cells, 3);
             stadium_raw = non_empty_cell(&second_row_cells, 4);
         }
     }
@@ -134,7 +114,6 @@ fn parse_event_block(node: ElementRef, year: &str) -> Option<MatchRecord> {
         .away_team(away_name)
         .score(score_record);
 
-    // Row 1 Column 4 typically holds City/Country
     if let Some(city) = first_row_cells
         .get(4)
         .map(cell_text)
@@ -143,7 +122,6 @@ fn parse_event_block(node: ElementRef, year: &str) -> Option<MatchRecord> {
         builder = builder.city_country(city);
     }
 
-    // Row 2 Column 4 typically holds Stadium and Attendance
     if let Some(raw_stadium) = stadium_raw {
         let (stadium, attendance) = extract_stadium_and_attendance(&raw_stadium);
         if let Some(std) = stadium {
@@ -161,26 +139,39 @@ fn parse_event_block(node: ElementRef, year: &str) -> Option<MatchRecord> {
 
 pub fn parse_scorers(text: &str) -> Vec<GoalDetail> {
     let mut goals = Vec::new();
-    // Captures the minute marker and optional modifiers like (pen.) or (o.g.)
-    let re_goal = Regex::new(r"(\d{1,3}(?:\+\d+)?')(?:\s*\((pen|o\.g\.|og)\.?)?").unwrap();
 
-    // Iterate line by line to parse individual player scorers cleanly
-    for line in text.lines() {
-        let line_clean = clean_text(line);
-        if line_clean.is_empty() {
-            continue;
-        }
+    // Captures digits (and added time) cleanly, keeping quote characters outside the capture group
+    let re_goal = Regex::new(r"(\d{1,3}(?:\+\d+)?)\s*['ʼ’](?:\s*\((pen|o\.g\.|og)\.?)?").unwrap();
 
-        let mut line_goals = Vec::new();
-        let mut first_match_start = None;
+    let mut last_scorer = String::new();
+    let mut last_idx = 0;
 
-        for caps in re_goal.captures_iter(&line_clean) {
-            let mat = caps.get(0).unwrap();
-            if first_match_start.is_none() {
-                first_match_start = Some(mat.start());
-            }
+    for caps in re_goal.captures_iter(text) {
+        let mat = caps.get(0).unwrap();
+        let match_start = mat.start();
+        let match_end = mat.end();
 
-            let minute = caps[1].to_string();
+        // Isolate the text segment between the end of the previous goal and the start of the current one
+        let raw_segment = &text[last_idx..match_start];
+
+        // Clean the segment of common lists/line delimiters: ;, *, •, and whitespace
+        let cleaned_name = raw_segment
+            .trim_matches(|c: char| {
+                c == ';' || c == ',' || c == '*' || c == '•' || c.is_whitespace()
+            })
+            .to_string();
+
+        let cleaned_name = clean_text(&cleaned_name);
+
+        // If the segment is empty, this goal belongs to the previous scorer (multi-goal game)
+        let scorer_name = if cleaned_name.is_empty() {
+            last_scorer.clone()
+        } else {
+            cleaned_name
+        };
+
+        if !scorer_name.is_empty() {
+            let minute = caps[1].to_string(); // Extracted without quotes
             let modifier = caps.get(2).map(|m| m.as_str().to_lowercase());
 
             let is_penalty = modifier.as_deref() == Some("pen");
@@ -189,21 +180,16 @@ pub fn parse_scorers(text: &str) -> Vec<GoalDetail> {
                 .map(|m| m.starts_with("o.g") || m.starts_with("og"))
                 .unwrap_or(false);
 
-            line_goals.push((minute, is_penalty, is_own_goal));
+            goals.push(GoalDetail::new(
+                scorer_name.clone(),
+                minute,
+                is_penalty,
+                is_own_goal,
+            ));
+            last_scorer = scorer_name;
         }
 
-        // The scorer name is everything preceding their first goal's minute
-        if let Some(start_idx) = first_match_start {
-            let name = clean_text(&line_clean[..start_idx]);
-            for (minute, is_penalty, is_own_goal) in line_goals {
-                goals.push(GoalDetail {
-                    scorer: name.clone(),
-                    minute,
-                    is_penalty,
-                    is_own_goal,
-                });
-            }
-        }
+        last_idx = match_end;
     }
 
     goals
@@ -216,63 +202,53 @@ pub fn parse_match_score(
     home_scorers_raw: Option<&str>,
     away_scorers_raw: Option<&str>,
 ) -> MatchScoreRecord {
-    let raw_clean = raw_score.trim().to_string();
-    let raw_lower = raw_clean.to_lowercase();
-
-    let mut record = MatchScoreRecord {
-        raw: raw_clean,
-        home: TeamScoreDetail {
-            team_name: home_name.to_string(),
-            ..Default::default()
-        },
-        away: TeamScoreDetail {
-            team_name: away_name.to_string(),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    let mut record = MatchScoreRecord::new(raw_score, home_name, away_name);
+    let raw_lower = raw_score.trim().to_lowercase();
 
     if raw_lower.contains("cancelled") {
-        record.is_cancelled = true;
+        record.set_cancelled(true);
         return record;
     }
 
     if raw_lower.contains("postponed") {
-        record.is_postponed = true;
+        record.set_postponed(true);
         return record;
     }
 
     if raw_lower.contains("a.e.t.") || raw_lower.contains("after extra time") {
-        record.extra_time = true;
+        record.set_extra_time(true);
     }
 
-    // Capture standard goal counts
     let re_score = Regex::new(r"(\d+)\s*[–-]\s*(\d+)").unwrap();
-    let mut matches = re_score.captures_iter(&record.raw);
+    let mut matches = re_score.captures_iter(raw_score);
 
     if let Some(caps) = matches.next() {
-        record.home.total_goals = caps[1].parse().ok();
-        record.away.total_goals = caps[2].parse().ok();
+        let home_goals = caps[1].parse::<u32>().ok();
+        let away_goals = caps[2].parse::<u32>().ok();
+        record.home_mut().set_total_goals(home_goals);
+        record.away_mut().set_total_goals(away_goals);
     }
 
-    // Capture shootout goals
     let re_penalties = Regex::new(r"\(\s*(\d+)\s*[–-]\s*(\d+)\s*(?:p|pen|penalties)\s*\)").unwrap();
-    if let Some(caps) = re_penalties.captures(&record.raw) {
-        record.home.penalty_shootout_goals = caps[1].parse().ok();
-        record.away.penalty_shootout_goals = caps[2].parse().ok();
+    if let Some(caps) = re_penalties.captures(raw_score) {
+        let home_pen = caps[1].parse::<u32>().ok();
+        let away_pen = caps[2].parse::<u32>().ok();
+        record.home_mut().set_penalty_shootout_goals(home_pen);
+        record.away_mut().set_penalty_shootout_goals(away_pen);
     } else if let Some(caps) = matches.next() {
         if raw_lower.contains('p') || raw_lower.contains("pen") {
-            record.home.penalty_shootout_goals = caps[1].parse().ok();
-            record.away.penalty_shootout_goals = caps[2].parse().ok();
+            let home_pen = caps[1].parse::<u32>().ok();
+            let away_pen = caps[2].parse::<u32>().ok();
+            record.home_mut().set_penalty_shootout_goals(home_pen);
+            record.away_mut().set_penalty_shootout_goals(away_pen);
         }
     }
 
-    // Parse scorers lists if present
     if let Some(home_text) = home_scorers_raw {
-        record.home.scorers = parse_scorers(home_text);
+        record.home_mut().set_scorers(parse_scorers(home_text));
     }
     if let Some(away_text) = away_scorers_raw {
-        record.away.scorers = parse_scorers(away_text);
+        record.away_mut().set_scorers(parse_scorers(away_text));
     }
 
     record
