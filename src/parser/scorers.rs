@@ -6,8 +6,11 @@ static RE_GOAL: OnceLock<Regex> = OnceLock::new();
 
 pub fn parse_scorers(text: &str) -> Vec<GoalDetail> {
     let mut goals = Vec::new();
+
+    // Allows optional whitespace inside the parentheses, e.g., "( pen. )" or "(o.g.)"
     let re_goal = RE_GOAL.get_or_init(|| {
-        Regex::new(r"(\d{1,3}(?:\+\d+)?)\s*['ʼ’](?:\s*\((pen|o\.g\.|og)\.?)?").unwrap()
+        Regex::new(r"(\d{1,3}(?:\+\d+)?)\s*['ʼ’](?:\s*\(\s*(pen|penalty|o\.g\.|og|p)\.?\s*\))?")
+            .unwrap()
     });
 
     let mut last_scorer = String::new();
@@ -31,10 +34,13 @@ pub fn parse_scorers(text: &str) -> Vec<GoalDetail> {
             let minute = caps[1].to_string(); // Captured without quote mark
             let modifier = caps.get(2).map(|m| m.as_str().to_lowercase());
 
-            let is_penalty = modifier.as_deref() == Some("pen");
+            let is_penalty = modifier
+                .as_ref()
+                .map(|m| m.starts_with('p'))
+                .unwrap_or(false);
             let is_own_goal = modifier
                 .as_ref()
-                .map(|m| m.starts_with("o.g") || m.starts_with("og"))
+                .map(|m| m.starts_with('o'))
                 .unwrap_or(false);
 
             goals.push(GoalDetail::new(
