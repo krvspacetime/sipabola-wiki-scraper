@@ -1,6 +1,7 @@
+// src/wiki_scraper/mod.rs
 use scraper::{ElementRef, Html, Selector};
 
-use crate::models::{MatchRecord};
+use crate::models::{MatchRecord, MatchRecordBuilder, PenaltyShootoutTaker};
 use crate::parser::{clean_city_country, parse_match_score, parse_stadium_details};
 
 pub struct ScraperConfig {
@@ -14,6 +15,36 @@ fn cell_text(cell: &ElementRef) -> String {
 
 fn non_empty_cell(cells: &[ElementRef], index: usize) -> Option<String> {
     cells.get(index).map(cell_text).filter(|s| !s.is_empty())
+}
+
+/// Helper to parse penalty shootout takers from HTML nodes
+fn parse_shootout_takers(cell: &ElementRef) -> Vec<PenaltyShootoutTaker> {
+    let mut takers = Vec::new();
+    let li_selector = Selector::parse("li").unwrap();
+    let img_selector = Selector::parse("img").unwrap();
+
+    for li in cell.select(&li_selector) {
+        let taker_name = crate::parser::clean_text(&li.text().collect::<String>());
+        if taker_name.is_empty() {
+            continue;
+        }
+
+        // Wikipedia uses Soccerball_shad_check.svg (or similar filename containing check) for scored,
+        // and Soccerball_shade_cross.svg (or similar containing cross/red X) for missed
+        let mut is_scored = false;
+        if let Some(img) = li.select(&img_selector).next() {
+            let alt = img.value().attr("alt").unwrap_or("").to_lowercase();
+            let title = img.value().attr("title").unwrap_or("").to_lowercase();
+
+            if alt.contains("check") || title.contains("scored") || title.contains("check") {
+                is_scored = true;
+            }
+        }
+
+        takers.push(PenaltyShootoutTaker::new(taker_name, is_scored));
+    }
+
+    takers
 }
 
 pub fn scrape_matches(html: &str, config: &ScraperConfig) -> anyhow::Result<Vec<MatchRecord>> {
@@ -78,10 +109,13 @@ fn scrape_event_block(node: ElementRef, year: &str) -> Option<MatchRecord> {
     let mut home_scorers_raw = None;
     let mut away_scorers_raw = None;
     let mut stadium_raw = None;
+    let mut match_time = None;
 
     if let Some(second_row) = rows.get(1) {
         let second_row_cells: Vec<_> = second_row.select(&cell_selector).collect();
         if second_row_cells.len() >= 4 {
+            // First column contains the kickoff time
+            match_time = non_empty_cell(&second_row_cells, 0);
             home_scorers_raw = non_empty_cell(&second_row_cells, 1);
             away_scorers_raw = non_empty_cell(&second_row_cells, 3);
             stadium_raw = non_empty_cell(&second_row_cells, 4);
@@ -89,7 +123,7 @@ fn scrape_event_block(node: ElementRef, year: &str) -> Option<MatchRecord> {
     }
 
     // Call out to our parser module to build the structured scoreline
-    let score_record = parse_match_score(
+    let mut score_record = parse_match_score(
         &raw_score,
         &home_name,
         &away_name,
@@ -97,16 +131,34 @@ fn scrape_event_block(node: ElementRef, year: &str) -> Option<MatchRecord> {
         away_scorers_raw.as_deref(),
     );
 
+    // If we have a four-row structure, extract the penalty shootout takers (Row 4, index 3)
+    if rows.len() >= 4 {
+        if let Some(shootout_row) = rows.get(3) {
+            let shootout_cells: Vec<_> = shootout_row.select(&cell_selector).collect();
+            if shootout_cells.len() >= 3 {
+                let home_shootout = parse_shootout_takers(&shootout_cells[0]);
+                let away_shootout = parse_shootout_takers(&shootout_cells[2]);
+
+                if !home_shootout.is_empty() {
+                    score_record.home_mut().set_shootout_takers(home_shootout);
+                }
+                if !away_shootout.is_empty() {
+                    score_record.away_mut().set_shootout_takers(away_shootout);
+                }
+            }
+        }
+    }
+
     let mut builder = MatchRecord::builder(year)
         .raw_date(raw_date)
         .competition(comp_name)
         .full_date(full_date)
         .home_team(home_name)
         .away_team(away_name)
-        .score(score_record);
+        .score(score_record)
+        .time(match_time);
 
-    // Row 1 Column 4 typically holds City/Country.
-    // We clean up spacing errors like "Phnom Penh , Cambodia" here.
+    // Row 1 Column 4 typically holds City/Country
     if let Some(city_raw) = first_row_cells
         .get(4)
         .map(cell_text)
@@ -116,10 +168,13 @@ fn scrape_event_block(node: ElementRef, year: &str) -> Option<MatchRecord> {
         builder = builder.city_country(clean_city);
     }
 
-    // Row 2 Column 4 typically holds Stadium and Attendance.
+    // Row 2 Column 4 typically holds Stadium, Attendance, and Referee
     if let Some(raw_stadium) = stadium_raw {
-        let (stadium, attendance) = parse_stadium_details(&raw_stadium);
-        builder = builder.stadium(stadium).attendance(attendance);
+        let (stadium, attendance, referee) = parse_stadium_details(&raw_stadium);
+        builder = builder
+            .stadium(stadium)
+            .attendance(attendance)
+            .referee(referee);
     }
 
     Some(builder.build())

@@ -1,6 +1,6 @@
-use serde::Serialize;
-
-use crate::models::MatchRecordBuilder;
+// src/models/match_record.rs
+use super::builder::MatchRecordBuilder;
+use serde::Serialize; // Add this line
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct GoalDetail {
@@ -34,12 +34,32 @@ impl GoalDetail {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct PenaltyShootoutTaker {
+    pub(super) taker: String,
+    pub(super) is_scored: bool,
+}
+
+impl PenaltyShootoutTaker {
+    pub fn new(taker: String, is_scored: bool) -> Self {
+        Self { taker, is_scored }
+    }
+
+    pub fn taker(&self) -> &str {
+        &self.taker
+    }
+    pub fn is_scored(&self) -> bool {
+        self.is_scored
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct TeamScoreDetail {
     pub(super) team_name: String,
     pub(super) total_goals: Option<u32>,
     pub(super) scorers: Vec<GoalDetail>,
     pub(super) penalty_shootout_goals: Option<u32>,
+    pub(super) shootout_takers: Vec<PenaltyShootoutTaker>, // Added shootout takers list
 }
 
 impl TeamScoreDetail {
@@ -49,6 +69,7 @@ impl TeamScoreDetail {
             total_goals: None,
             scorers: Vec::new(),
             penalty_shootout_goals: None,
+            shootout_takers: Vec::new(),
         }
     }
 
@@ -64,6 +85,9 @@ impl TeamScoreDetail {
     pub fn penalty_shootout_goals(&self) -> Option<u32> {
         self.penalty_shootout_goals
     }
+    pub fn shootout_takers(&self) -> &[PenaltyShootoutTaker] {
+        &self.shootout_takers
+    }
 
     pub(crate) fn set_total_goals(&mut self, goals: Option<u32>) {
         self.total_goals = goals;
@@ -75,6 +99,10 @@ impl TeamScoreDetail {
 
     pub(crate) fn set_scorers(&mut self, scorers: Vec<GoalDetail>) {
         self.scorers = scorers;
+    }
+
+    pub(crate) fn set_shootout_takers(&mut self, takers: Vec<PenaltyShootoutTaker>) {
+        self.shootout_takers = takers;
     }
 }
 
@@ -159,9 +187,13 @@ pub struct MatchRecord {
     pub(super) city_country: String,
     pub(super) stadium: Option<String>,
     pub(super) attendance: Option<String>,
+    pub(super) time: Option<String>,    // Added match kickoff time
+    pub(super) referee: Option<String>, // Added referee name
 }
 
+// Inside: impl MatchRecord inside src/models/match_record.rs
 impl MatchRecord {
+    // Add this associated function
     pub fn builder(year: impl Into<String>) -> MatchRecordBuilder {
         MatchRecordBuilder::new(year)
     }
@@ -202,5 +234,11 @@ impl MatchRecord {
     }
     pub fn attendance(&self) -> Option<&str> {
         self.attendance.as_deref()
+    }
+    pub fn time(&self) -> Option<&str> {
+        self.time.as_deref()
+    }
+    pub fn referee(&self) -> Option<&str> {
+        self.referee.as_deref()
     }
 }

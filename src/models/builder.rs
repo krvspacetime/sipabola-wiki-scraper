@@ -1,3 +1,4 @@
+// src/models/builder.rs
 use super::match_record::{MatchRecord, MatchScoreRecord};
 
 #[derive(Debug, Default)]
@@ -62,6 +63,16 @@ impl MatchRecordBuilder {
 
     pub fn attendance(mut self, value: Option<String>) -> Self {
         self.record.attendance = value;
+        self
+    }
+
+    pub fn time(mut self, value: Option<String>) -> Self {
+        self.record.time = value;
+        self
+    }
+
+    pub fn referee(mut self, value: Option<String>) -> Self {
+        self.record.referee = value;
         self
     }
 

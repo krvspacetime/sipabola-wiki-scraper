@@ -1,3 +1,4 @@
+// src/parser/text.rs
 use regex::Regex;
 use std::sync::OnceLock;
 
@@ -8,17 +9,12 @@ pub fn clean_text(text: &str) -> String {
     let re_citations = RE_CITATIONS.get_or_init(|| Regex::new(r"\[\d+\]").unwrap());
     let re_edit_links = RE_EDIT_LINKS.get_or_init(|| Regex::new(r"\[edit\]").unwrap());
 
-    // 1. Remove citations
     let stepped1 = re_citations.replace_all(text, "");
-
-    // 2. Remove edit links (stepped2 safely borrows from stepped1, and both live until the end of this function)
     let stepped2 = re_edit_links.replace_all(&stepped1, "");
 
-    // 3. Trim delimiters
     let trimmed = stepped2
         .trim_matches(|c: char| c == ';' || c == ',' || c == '*' || c == '•' || c.is_whitespace());
 
-    // 4. Collapse whitespace and allocate a new owned String
     trimmed.split_whitespace().collect::<Vec<&str>>().join(" ")
 }
 
@@ -32,20 +28,34 @@ pub fn clean_city_country(text: &str) -> String {
         .to_string()
 }
 
-pub fn parse_stadium_details(text: &str) -> (Option<String>, Option<String>) {
+/// Splits stadium name, attendance, and referee details from raw details string
+pub fn parse_stadium_details(text: &str) -> (Option<String>, Option<String>, Option<String>) {
     let text = clean_text(text);
     let mut stadium = None;
     let mut attendance = None;
+    let mut referee = None;
 
-    let parts: Vec<&str> = text.split("Attendance:").collect();
-    if parts.len() > 1 {
-        let att_raw = parts[1].trim();
+    // 1. Isolate Referee details
+    let ref_parts: Vec<&str> = text.split("Referee:").collect();
+    if ref_parts.len() > 1 {
+        let ref_raw = ref_parts[1].trim();
+        if !ref_raw.is_empty() {
+            referee = Some(ref_raw.to_string());
+        }
+    }
+
+    // 2. Isolate Attendance from the preceding segment
+    let main_part = ref_parts[0].trim();
+    let att_parts: Vec<&str> = main_part.split("Attendance:").collect();
+    if att_parts.len() > 1 {
+        let att_raw = att_parts[1].trim();
         if !att_raw.is_empty() {
             attendance = Some(att_raw.to_string());
         }
     }
 
-    let stadium_part = parts[0].trim();
+    // 3. Isolate Stadium
+    let stadium_part = att_parts[0].trim();
     let clean_stadium = if stadium_part.starts_with("Stadium:") {
         stadium_part.replacen("Stadium:", "", 1).trim().to_string()
     } else {
@@ -56,5 +66,5 @@ pub fn parse_stadium_details(text: &str) -> (Option<String>, Option<String>) {
         stadium = Some(clean_stadium);
     }
 
-    (stadium, attendance)
+    (stadium, attendance, referee)
 }
