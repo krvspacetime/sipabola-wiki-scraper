@@ -1,6 +1,6 @@
-// src/models/match_record.rs
-use super::builder::MatchRecordBuilder;
-use serde::Serialize; // Add this line
+use serde::Serialize;
+
+use crate::models::MatchRecordBuilder; // Add this line
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct GoalDetail {

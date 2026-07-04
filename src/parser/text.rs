@@ -68,3 +68,12 @@ pub fn parse_stadium_details(text: &str) -> (Option<String>, Option<String>, Opt
 
     (stadium, attendance, referee)
 }
+
+/// Collapses whitespace and replaces non-breaking spaces with standard spaces
+pub fn clean_time(time_str: &str) -> String {
+    let normalized = time_str.replace('\u{00a0}', " ");
+    normalized
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join(" ")
+}

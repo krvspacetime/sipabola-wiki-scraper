@@ -1,9 +1,9 @@
 // src/wiki_scraper/footballbox.rs
-use super::{HtmlScraper, ScraperConfig};
-use crate::models::{MatchRecord, MatchRecordBuilder, PenaltyShootoutTaker};
-use crate::parser::{clean_city_country, clean_text, parse_match_score, parse_stadium_details};
+use super::{HtmlScraper, RawMatchData};
+use crate::models::PenaltyShootoutTaker;
+use crate::parser::clean_text;
 use regex::Regex;
-use scraper::{ElementRef, Html, Selector};
+use scraper::{ElementRef, Selector};
 
 pub struct FootballBoxScraper;
 
@@ -12,15 +12,18 @@ impl FootballBoxScraper {
         cell.text().collect::<Vec<_>>().join(" ").trim().to_string()
     }
 
+    /// Safely isolates date, removes parentheticals, and extracts the year
     fn parse_date_and_year(&self, cell: &ElementRef) -> (String, String) {
         let text = clean_text(&cell.text().collect::<String>());
+        let date_clean = text.split('(').next().unwrap_or("").trim().to_string();
+
         let re_year = Regex::new(r"\b(19\d{2}|20\d{2})\b").unwrap();
-        let year = if let Some(caps) = re_year.captures(&text) {
+        let year = if let Some(caps) = re_year.captures(&date_clean) {
             caps[0].to_string()
         } else {
             String::new()
         };
-        (text, year)
+        (date_clean, year)
     }
 
     fn parse_shootout_takers(&self, cell: &ElementRef) -> Vec<PenaltyShootoutTaker> {
@@ -51,20 +54,17 @@ impl FootballBoxScraper {
 }
 
 impl HtmlScraper for FootballBoxScraper {
-    fn can_scrape(&self, document: &Html, _config: &ScraperConfig) -> bool {
-        let selector = Selector::parse("div.footballbox").unwrap();
-        document.select(&selector).next().is_some()
+    fn can_scrape(&self, node: &ElementRef) -> bool {
+        node.value().classes().any(|c| c == "footballbox")
     }
 
-    fn scrape(&self, html: &str, config: &ScraperConfig) -> anyhow::Result<Vec<MatchRecord>> {
-        let document = Html::parse_document(html);
-        let box_selector = Selector::parse("div.footballbox").unwrap();
+    fn extract_raw_match(&self, node: &ElementRef) -> Option<RawMatchData> {
+        let table_selector = Selector::parse("table.fevent").ok()?;
+        let row_selector = Selector::parse("tr").ok()?;
 
         let fleft_selector = Selector::parse(".fleft").unwrap();
         let fdate_selector = Selector::parse(".fdate").unwrap();
         let ftime_selector = Selector::parse(".ftime").unwrap();
-        let fevent_selector = Selector::parse("table.fevent").unwrap();
-        let tr_selector = Selector::parse("tr").unwrap();
 
         let fhome_selector = Selector::parse(".fhome").unwrap();
         let fscore_selector = Selector::parse(".fscore").unwrap();
@@ -76,147 +76,110 @@ impl HtmlScraper for FootballBoxScraper {
         let location_selector = Selector::parse("div[itemprop='location']").unwrap();
         let div_selector = Selector::parse("div").unwrap();
 
-        let mut records = Vec::new();
+        // 1. Extract Date and Time from fleft (routing fdate through parse_date_and_year to collapse whitespaces)
+        let mut raw_date = String::new();
+        let mut match_time = None;
 
-        for node in document.select(&box_selector) {
-            // 1. Extract Date and Time from fleft
-            let mut raw_date = String::new();
-            let mut year = String::new();
-            let mut match_time = None;
+        if let Some(fleft) = node.select(&fleft_selector).next() {
+            if let Some(fdate) = fleft.select(&fdate_selector).next() {
+                let (d, _) = self.parse_date_and_year(&fdate);
+                raw_date = d;
+            }
+            if let Some(ftime) = fleft.select(&ftime_selector).next() {
+                match_time = Some(self.cell_text(&ftime));
+            }
+        }
 
-            if let Some(fleft) = node.select(&fleft_selector).next() {
-                if let Some(fdate) = fleft.select(&fdate_selector).next() {
-                    let (d, y) = self.parse_date_and_year(&fdate);
-                    raw_date = d;
-                    year = y;
-                }
-                if let Some(ftime) = fleft.select(&ftime_selector).next() {
-                    match_time = Some(self.cell_text(&ftime));
+        // 2. Extract Teams, Scores, Scorers from fevent table
+        let table = node.select(&table_selector).next()?;
+        let rows: Vec<_> = table.select(&row_selector).collect();
+        let first_row = rows.first()?;
+
+        let home_cell = first_row.select(&fhome_selector).next()?;
+        let score_cell = first_row.select(&fscore_selector).next()?;
+        let away_cell = first_row.select(&faway_selector).next()?;
+
+        let home_name = self.cell_text(&home_cell);
+        let raw_score = self.cell_text(&score_cell);
+        let away_name = self.cell_text(&away_cell);
+
+        let mut home_scorers_raw = None;
+        let mut away_scorers_raw = None;
+
+        // Second row (tr.fgoals) contains goal scorers
+        if let Some(second_row) = rows.get(1) {
+            if let Some(hgoal_cell) = second_row.select(&fhgoal_selector).next() {
+                let h_text = self.cell_text(&hgoal_cell);
+                if !h_text.is_empty() {
+                    home_scorers_raw = Some(h_text);
                 }
             }
-
-            // 2. Extract Teams, Scores, Scorers from fevent table
-            if let Some(table) = node.select(&fevent_selector).next() {
-                let rows: Vec<_> = table.select(&tr_selector).collect();
-                if let Some(first_row) = rows.first() {
-                    let home_el = first_row.select(&fhome_selector).next();
-                    let score_el = first_row.select(&fscore_selector).next();
-                    let away_el = first_row.select(&faway_selector).next();
-
-                    if let (Some(home_cell), Some(score_cell), Some(away_cell)) =
-                        (home_el, score_el, away_el)
-                    {
-                        let home_name = self.cell_text(&home_cell);
-                        let raw_score = self.cell_text(&score_cell);
-                        let away_name = self.cell_text(&away_cell);
-
-                        let mut home_scorers_raw = None;
-                        let mut away_scorers_raw = None;
-
-                        // Second row (tr.fgoals) contains goal scorers
-                        if let Some(second_row) = rows.get(1) {
-                            if let Some(hgoal_cell) = second_row.select(&fhgoal_selector).next() {
-                                let h_text = self.cell_text(&hgoal_cell);
-                                if !h_text.is_empty() {
-                                    home_scorers_raw = Some(h_text);
-                                }
-                            }
-                            if let Some(agoal_cell) = second_row.select(&fagoal_selector).next() {
-                                let a_text = self.cell_text(&agoal_cell);
-                                if !a_text.is_empty() {
-                                    away_scorers_raw = Some(a_text);
-                                }
-                            }
-                        }
-
-                        // Parse the scoreline
-                        let mut score_record = parse_match_score(
-                            &raw_score,
-                            &home_name,
-                            &away_name,
-                            home_scorers_raw.as_deref(),
-                            away_scorers_raw.as_deref(),
-                        );
-
-                        // If a fourth row (shootout) is present, parse penalty takers
-                        if rows.len() >= 4 {
-                            if let Some(shootout_row) = rows.get(3) {
-                                let home_shoot_el = shootout_row.select(&fhgoal_selector).next();
-                                let away_shoot_el = shootout_row.select(&fagoal_selector).next();
-
-                                if let (Some(h_shoot_cell), Some(a_shoot_cell)) =
-                                    (home_shoot_el, away_shoot_el)
-                                {
-                                    let home_shootout = self.parse_shootout_takers(&h_shoot_cell);
-                                    let away_shootout = self.parse_shootout_takers(&a_shoot_cell);
-
-                                    if !home_shootout.is_empty() {
-                                        score_record.home_mut().set_shootout_takers(home_shootout);
-                                    }
-                                    if !away_shootout.is_empty() {
-                                        score_record.away_mut().set_shootout_takers(away_shootout);
-                                    }
-                                }
-                            }
-                        }
-
-                        let full_date = format!("{}, {}", raw_date, year);
-                        let mut builder = MatchRecord::builder(&year)
-                            .raw_date(raw_date)
-                            .competition(&config.year_header_class) // Sourced from configuration header context
-                            .full_date(full_date)
-                            .home_team(home_name)
-                            .away_team(away_name)
-                            .score(score_record)
-                            .time(match_time);
-
-                        // 3. Extract Stadium, Attendance, and Referee from fright
-                        let mut city_country = String::new();
-                        let mut stadium = None;
-                        let mut attendance = None;
-                        let mut referee = None;
-
-                        let fright_selector = Selector::parse(".fright").unwrap();
-                        if let Some(fright) = node.select(&fright_selector).next() {
-                            if let Some(loc) = fright.select(&location_selector).next() {
-                                city_country = clean_city_country(&self.cell_text(&loc));
-                            }
-
-                            for div in fright.select(&div_selector) {
-                                let text = clean_text(&div.text().collect::<String>());
-                                if text.starts_with("Attendance:") {
-                                    attendance = Some(
-                                        text.replacen("Attendance:", "", 1).trim().to_string(),
-                                    );
-                                } else if text.starts_with("Referee:") {
-                                    referee =
-                                        Some(text.replacen("Referee:", "", 1).trim().to_string());
-                                } else if div.value().attr("itemprop").is_none() && !text.is_empty()
-                                {
-                                    // Location string parsing fallback to stadium
-                                    let parts: Vec<&str> = text.split(',').collect();
-                                    if !parts.is_empty() {
-                                        stadium = Some(parts[0].trim().to_string());
-                                    }
-                                }
-                            }
-                        }
-
-                        builder = builder
-                            .city_country(city_country)
-                            .stadium(stadium)
-                            .attendance(attendance)
-                            .referee(referee);
-
-                        let record = builder.build();
-                        if record.is_complete() {
-                            records.push(record);
-                        }
-                    }
+            if let Some(agoal_cell) = second_row.select(&fagoal_selector).next() {
+                let a_text = self.cell_text(&agoal_cell);
+                if !a_text.is_empty() {
+                    away_scorers_raw = Some(a_text);
                 }
             }
         }
 
-        Ok(records)
+        // If a fourth row (shootout) is present, parse penalty takers
+        let mut home_shootout = Vec::new();
+        let mut away_shootout = Vec::new();
+
+        if rows.len() >= 4 {
+            if let Some(shootout_row) = rows.get(3) {
+                let home_shoot_el = shootout_row.select(&fhgoal_selector).next();
+                let away_shoot_el = shootout_row.select(&fagoal_selector).next();
+
+                if let (Some(h_shoot_cell), Some(a_shoot_cell)) = (home_shoot_el, away_shoot_el) {
+                    home_shootout = self.parse_shootout_takers(&h_shoot_cell);
+                    away_shootout = self.parse_shootout_takers(&a_shoot_cell);
+                }
+            }
+        }
+
+        // 3. Extract Stadium, Attendance, and Referee from fright
+        let mut city_country = String::new();
+        let mut stadium_raw = String::new();
+
+        let fright_selector = Selector::parse(".fright").unwrap();
+        if let Some(fright) = node.select(&fright_selector).next() {
+            if let Some(loc) = fright.select(&location_selector).next() {
+                city_country = self.cell_text(&loc);
+            }
+
+            for div in fright.select(&div_selector) {
+                let text = clean_text(&div.text().collect::<String>());
+                if div.value().attr("itemprop").is_none() && !text.is_empty() {
+                    // Append metadata lines for the stadium parser
+                    stadium_raw.push_str(&text);
+                    stadium_raw.push(' ');
+                }
+            }
+        }
+
+        let stadium_details = if !stadium_raw.is_empty() {
+            Some(stadium_raw)
+        } else {
+            None
+        };
+
+        Some(RawMatchData {
+            raw_date,
+            raw_time: match_time,
+            raw_home_team: home_name,
+            raw_away_team: away_name,
+            raw_score,
+            raw_home_scorers: home_scorers_raw,
+            raw_away_scorers: away_scorers_raw,
+            raw_city_country: if !city_country.is_empty() {
+                Some(city_country)
+            } else {
+                None
+            },
+            raw_stadium_details: stadium_details,
+            raw_home_shootout: home_shootout, // Explicitly assign local variable to struct field
+            raw_away_shootout: away_shootout, // Explicitly assign local variable to struct field
+        })
     }
 }
