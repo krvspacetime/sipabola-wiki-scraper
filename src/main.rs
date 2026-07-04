@@ -5,10 +5,7 @@ use std::{
 };
 
 use crate::{
-    config::Config,
-    fetcher::fetch_html,
-    models::MatchRecord,
-    wiki_scraper::{ScraperConfig, scrape_matches},
+    config::Config, fetcher::fetch_html, models::MatchRecord, wiki_scraper::ScraperConfig,
 };
 
 mod config;
@@ -19,6 +16,7 @@ mod wiki_scraper;
 
 const OUTPUT_PATH: &str = "out/output.json";
 
+// In src/main.rs inside fn main() -> anyhow::Result<()>
 fn main() -> anyhow::Result<()> {
     let config = Config::load()?;
     let html = fetch_html(&config.url)?;
@@ -28,7 +26,10 @@ fn main() -> anyhow::Result<()> {
         event_header_class: config.event_header_class,
     };
 
-    let records = scrape_matches(&html, &scraper_config)?;
+    // Auto-detect the template style and run the polymorphic scraper
+    let records =
+        wiki_scraper::get_scraper(&html, &scraper_config).scrape(&html, &scraper_config)?;
+
     write_json(&records, OUTPUT_PATH)?;
 
     Ok(())
