@@ -6,6 +6,8 @@ use scraper::{ElementRef, Html, Selector};
 pub mod footballbox;
 pub mod vevent;
 
+mod dom;
+
 pub use footballbox::FootballBoxScraper;
 pub use vevent::VeventScraper;
 

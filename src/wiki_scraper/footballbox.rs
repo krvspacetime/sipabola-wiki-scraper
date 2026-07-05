@@ -1,6 +1,8 @@
 // src/wiki_scraper/footballbox.rs
-use super::{HtmlScraper, RawMatchData};
-use crate::models::PenaltyShootoutTaker;
+use super::{
+    HtmlScraper, RawMatchData,
+    dom::{element_text, parse_shootout_takers},
+};
 use crate::parser::clean_text;
 use regex::Regex;
 use scraper::{ElementRef, Selector};
@@ -8,10 +10,6 @@ use scraper::{ElementRef, Selector};
 pub struct FootballBoxScraper;
 
 impl FootballBoxScraper {
-    fn cell_text(&self, cell: &ElementRef) -> String {
-        cell.text().collect::<Vec<_>>().join(" ").trim().to_string()
-    }
-
     /// Safely isolates date, removes parentheticals, and extracts the year
     fn parse_date_and_year(&self, cell: &ElementRef) -> (String, String) {
         let text = clean_text(&cell.text().collect::<String>());
@@ -24,32 +22,6 @@ impl FootballBoxScraper {
             String::new()
         };
         (date_clean, year)
-    }
-
-    fn parse_shootout_takers(&self, cell: &ElementRef) -> Vec<PenaltyShootoutTaker> {
-        let mut takers = Vec::new();
-        let li_selector = Selector::parse("li").unwrap();
-        let img_selector = Selector::parse("img").unwrap();
-
-        for li in cell.select(&li_selector) {
-            let taker_name = clean_text(&li.text().collect::<String>());
-            if taker_name.is_empty() {
-                continue;
-            }
-
-            let mut is_scored = false;
-            if let Some(img) = li.select(&img_selector).next() {
-                let alt = img.value().attr("alt").unwrap_or("").to_lowercase();
-                let title = img.value().attr("title").unwrap_or("").to_lowercase();
-                if alt.contains("check") || title.contains("scored") || title.contains("check") {
-                    is_scored = true;
-                }
-            }
-
-            takers.push(PenaltyShootoutTaker::new(taker_name, is_scored));
-        }
-
-        takers
     }
 }
 
@@ -86,7 +58,7 @@ impl HtmlScraper for FootballBoxScraper {
                 raw_date = d;
             }
             if let Some(ftime) = fleft.select(&ftime_selector).next() {
-                match_time = Some(self.cell_text(&ftime));
+                match_time = Some(element_text(&ftime));
             }
         }
 
@@ -99,9 +71,9 @@ impl HtmlScraper for FootballBoxScraper {
         let score_cell = first_row.select(&fscore_selector).next()?;
         let away_cell = first_row.select(&faway_selector).next()?;
 
-        let home_name = self.cell_text(&home_cell);
-        let raw_score = self.cell_text(&score_cell);
-        let away_name = self.cell_text(&away_cell);
+        let home_name = element_text(&home_cell);
+        let raw_score = element_text(&score_cell);
+        let away_name = element_text(&away_cell);
 
         let mut home_scorers_raw = None;
         let mut away_scorers_raw = None;
@@ -109,13 +81,13 @@ impl HtmlScraper for FootballBoxScraper {
         // Second row (tr.fgoals) contains goal scorers
         if let Some(second_row) = rows.get(1) {
             if let Some(hgoal_cell) = second_row.select(&fhgoal_selector).next() {
-                let h_text = self.cell_text(&hgoal_cell);
+                let h_text = element_text(&hgoal_cell);
                 if !h_text.is_empty() {
                     home_scorers_raw = Some(h_text);
                 }
             }
             if let Some(agoal_cell) = second_row.select(&fagoal_selector).next() {
-                let a_text = self.cell_text(&agoal_cell);
+                let a_text = element_text(&agoal_cell);
                 if !a_text.is_empty() {
                     away_scorers_raw = Some(a_text);
                 }
@@ -132,8 +104,8 @@ impl HtmlScraper for FootballBoxScraper {
                 let away_shoot_el = shootout_row.select(&fagoal_selector).next();
 
                 if let (Some(h_shoot_cell), Some(a_shoot_cell)) = (home_shoot_el, away_shoot_el) {
-                    home_shootout = self.parse_shootout_takers(&h_shoot_cell);
-                    away_shootout = self.parse_shootout_takers(&a_shoot_cell);
+                    home_shootout = parse_shootout_takers(&h_shoot_cell);
+                    away_shootout = parse_shootout_takers(&a_shoot_cell);
                 }
             }
         }
@@ -145,7 +117,7 @@ impl HtmlScraper for FootballBoxScraper {
         let fright_selector = Selector::parse(".fright").unwrap();
         if let Some(fright) = node.select(&fright_selector).next() {
             if let Some(loc) = fright.select(&location_selector).next() {
-                city_country = self.cell_text(&loc);
+                city_country = element_text(&loc);
             }
 
             for div in fright.select(&div_selector) {
@@ -178,8 +150,8 @@ impl HtmlScraper for FootballBoxScraper {
                 None
             },
             raw_stadium_details: stadium_details,
-            raw_home_shootout: home_shootout, // Explicitly assign local variable to struct field
-            raw_away_shootout: away_shootout, // Explicitly assign local variable to struct field
+            raw_home_shootout: home_shootout,
+            raw_away_shootout: away_shootout,
         })
     }
 }
