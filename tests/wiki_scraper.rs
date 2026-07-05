@@ -1,10 +1,7 @@
 use sipabola_scrape_historical_data::wiki_scraper::{self, ScraperConfig};
 
 fn test_config() -> ScraperConfig {
-    ScraperConfig {
-        year_header_class: "mw-heading3".to_string(),
-        event_header_class: "vevent".to_string(),
-    }
+    ScraperConfig::default()
 }
 
 #[test]
@@ -144,6 +141,79 @@ fn scrapes_footballbox_match_fixture() {
     assert_eq!(record.score().away().scorers()[0].scorer(), "Ayala");
     assert_eq!(record.score().home().shootout_takers().len(), 2);
     assert_eq!(record.score().away().shootout_takers().len(), 2);
+    assert_eq!(record.score().home().penalty_shootout_goals(), Some(4));
+    assert_eq!(record.score().away().penalty_shootout_goals(), Some(2));
     assert!(record.score().home().shootout_takers()[0].is_scored());
     assert!(!record.score().away().shootout_takers()[1].is_scored());
+}
+
+#[test]
+fn ignores_nodes_that_match_page_selector_but_no_registered_scraper() {
+    let html = r#"
+        <html>
+          <body>
+            <h2>1983 Friendly</h2>
+            <div class="match-card">
+              <table>
+                <tbody>
+                  <tr>
+                    <td>April 14</td>
+                    <td>Philippines</td>
+                    <td>2-0</td>
+                    <td>Hong Kong</td>
+                    <td>Thailand</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </body>
+        </html>
+    "#;
+
+    let config = ScraperConfig {
+        year_header_class: "mw-heading3".to_string(),
+        event_header_class: "match-card".to_string(),
+    };
+
+    let records = wiki_scraper::scrape_matches(html, &config).unwrap();
+
+    assert!(records.is_empty());
+}
+
+#[test]
+fn reports_basic_scrape_diagnostics() {
+    let html = r#"
+        <html>
+          <body>
+            <h2>1983 Friendly</h2>
+            <div class="match-card"></div>
+            <div class="vevent">
+              <table>
+                <tbody>
+                  <tr>
+                    <td>April 14</td>
+                    <td>Philippines</td>
+                    <td>2-0</td>
+                    <td>Hong Kong</td>
+                    <td>Thailand</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </body>
+        </html>
+    "#;
+
+    let config = ScraperConfig {
+        year_header_class: "mw-heading3".to_string(),
+        event_header_class: "match-card".to_string(),
+    };
+
+    let report = wiki_scraper::scrape_matches_with_diagnostics(html, &config).unwrap();
+
+    assert_eq!(report.records.len(), 1);
+    assert_eq!(report.diagnostics.matched_nodes, 1);
+    assert_eq!(report.diagnostics.unsupported_nodes, 1);
+    assert_eq!(report.diagnostics.extracted_matches, 1);
+    assert_eq!(report.diagnostics.build_failures, 0);
 }

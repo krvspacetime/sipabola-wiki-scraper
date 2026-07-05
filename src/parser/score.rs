@@ -14,6 +14,7 @@ pub fn parse_match_score(
     away_name: &str,
     home_scorers_raw: Option<&str>,
     away_scorers_raw: Option<&str>,
+    shootout_score_raw: Option<&str>,
 ) -> MatchScoreRecord {
     let home_detail = TeamScoreDetail::new(home_name.to_string());
     let away_detail = TeamScoreDetail::new(away_name.to_string());
@@ -49,7 +50,12 @@ pub fn parse_match_score(
         Regex::new(r"\(\s*(\d+)\s*[–-]\s*(\d+)\s*(?:p|pen|penalties)\s*\)").unwrap()
     });
 
-    if let Some(caps) = re_penalties.captures(raw_score) {
+    if let Some(caps) = shootout_score_raw.and_then(|score| re_score.captures(score)) {
+        let home_pen = caps[1].parse::<u32>().ok();
+        let away_pen = caps[2].parse::<u32>().ok();
+        record.home_mut().set_penalty_shootout_goals(home_pen);
+        record.away_mut().set_penalty_shootout_goals(away_pen);
+    } else if let Some(caps) = re_penalties.captures(raw_score) {
         let home_pen = caps[1].parse::<u32>().ok();
         let away_pen = caps[2].parse::<u32>().ok();
         record.home_mut().set_penalty_shootout_goals(home_pen);

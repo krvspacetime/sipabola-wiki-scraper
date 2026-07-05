@@ -8,6 +8,10 @@ use scraper::{ElementRef, Html, Selector};
 pub struct VeventScraper;
 
 impl HtmlScraper for VeventScraper {
+    fn root_selector(&self) -> &'static str {
+        "div.vevent"
+    }
+
     fn can_scrape(&self, node: &ElementRef) -> bool {
         node.value().classes().any(|c| c == "vevent")
     }
@@ -27,7 +31,10 @@ impl HtmlScraper for VeventScraper {
         }
 
         let raw_date_and_comp_name_vec = first_row_cells[0].text().collect::<Vec<_>>();
-        let raw_date = raw_date_and_comp_name_vec[0].trim().to_string();
+        let raw_date = raw_date_and_comp_name_vec
+            .first()
+            .map(|text| text.trim().to_string())
+            .unwrap_or_default();
 
         let home_name = element_text(&first_row_cells[1]);
         let away_name = element_text(&first_row_cells[3]);
@@ -76,6 +83,7 @@ impl HtmlScraper for VeventScraper {
             raw_away_scorers: away_scorers_raw,
             raw_city_country: city_raw,
             raw_stadium_details: stadium_raw,
+            raw_shootout_score: None,
             raw_home_shootout: home_shootout,
             raw_away_shootout: away_shootout,
         })

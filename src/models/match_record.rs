@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::models::MatchRecordBuilder; // Add this line
+use crate::models::MatchRecordBuilder;
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct GoalDetail {
@@ -59,7 +59,7 @@ pub struct TeamScoreDetail {
     pub(super) total_goals: Option<u32>,
     pub(super) scorers: Vec<GoalDetail>,
     pub(super) penalty_shootout_goals: Option<u32>,
-    pub(super) shootout_takers: Vec<PenaltyShootoutTaker>, // Added shootout takers list
+    pub(super) shootout_takers: Vec<PenaltyShootoutTaker>,
 }
 
 impl TeamScoreDetail {
@@ -187,19 +187,13 @@ pub struct MatchRecord {
     pub(super) city_country: String,
     pub(super) stadium: Option<String>,
     pub(super) attendance: Option<String>,
-    pub(super) time: Option<String>,    // Added match kickoff time
-    pub(super) referee: Option<String>, // Added referee name
+    pub(super) time: Option<String>,
+    pub(super) referee: Option<String>,
 }
 
-// Inside: impl MatchRecord inside src/models/match_record.rs
 impl MatchRecord {
-    // Add this associated function
     pub fn builder(year: impl Into<String>) -> MatchRecordBuilder {
         MatchRecordBuilder::new(year)
-    }
-
-    pub fn is_complete(&self) -> bool {
-        !self.home_team.is_empty() && !self.away_team.is_empty() && !self.score.raw.is_empty()
     }
 
     pub fn raw_date(&self) -> &str {

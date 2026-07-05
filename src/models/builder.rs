@@ -1,5 +1,25 @@
 // src/models/builder.rs
 use super::match_record::{MatchRecord, MatchScoreRecord};
+use std::{error::Error, fmt};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MatchRecordBuildError {
+    MissingHomeTeam,
+    MissingAwayTeam,
+    MissingScore,
+}
+
+impl fmt::Display for MatchRecordBuildError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingHomeTeam => f.write_str("match record is missing home team"),
+            Self::MissingAwayTeam => f.write_str("match record is missing away team"),
+            Self::MissingScore => f.write_str("match record is missing score"),
+        }
+    }
+}
+
+impl Error for MatchRecordBuildError {}
 
 #[derive(Debug, Default)]
 pub struct MatchRecordBuilder {
@@ -76,7 +96,17 @@ impl MatchRecordBuilder {
         self
     }
 
-    pub fn build(self) -> MatchRecord {
-        self.record
+    pub fn build(self) -> Result<MatchRecord, MatchRecordBuildError> {
+        if self.record.home_team.trim().is_empty() {
+            return Err(MatchRecordBuildError::MissingHomeTeam);
+        }
+        if self.record.away_team.trim().is_empty() {
+            return Err(MatchRecordBuildError::MissingAwayTeam);
+        }
+        if self.record.score.raw().trim().is_empty() {
+            return Err(MatchRecordBuildError::MissingScore);
+        }
+
+        Ok(self.record)
     }
 }

@@ -16,6 +16,15 @@ pub struct ScraperConfig {
     pub event_header_class: String,
 }
 
+impl Default for ScraperConfig {
+    fn default() -> Self {
+        Self {
+            year_header_class: "mw-heading3".to_string(),
+            event_header_class: "vevent".to_string(),
+        }
+    }
+}
+
 pub struct RawMatchData {
     pub raw_date: String,
     pub raw_time: Option<String>,
@@ -26,11 +35,30 @@ pub struct RawMatchData {
     pub raw_away_scorers: Option<String>,
     pub raw_city_country: Option<String>,
     pub raw_stadium_details: Option<String>,
+    pub raw_shootout_score: Option<String>,
     pub raw_home_shootout: Vec<PenaltyShootoutTaker>,
     pub raw_away_shootout: Vec<PenaltyShootoutTaker>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ScrapeDiagnostics {
+    pub matched_nodes: usize,
+    pub unsupported_nodes: usize,
+    pub extracted_matches: usize,
+    pub incomplete_records: usize,
+    pub build_failures: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScrapeReport {
+    pub records: Vec<MatchRecord>,
+    pub diagnostics: ScrapeDiagnostics,
+}
+
 pub trait HtmlScraper {
+    /// CSS selector for nodes this scraper can parse.
+    fn root_selector(&self) -> &'static str;
+
     /// True if the CSS selectors of this scraper match the node
     fn can_scrape(&self, node: &ElementRef) -> bool;
 
@@ -38,28 +66,68 @@ pub trait HtmlScraper {
     fn extract_raw_match(&self, node: &ElementRef) -> Option<RawMatchData>;
 }
 
-/// Centralized factory to choose the parser dynamically
-fn get_scraper_for_node(node: &ElementRef) -> Box<dyn HtmlScraper> {
-    let fb_scraper = FootballBoxScraper;
-    if fb_scraper.can_scrape(node) {
-        Box::new(fb_scraper)
-    } else {
-        Box::new(VeventScraper)
-    }
+fn get_scraper_for_node<'a>(
+    node: &ElementRef,
+    scrapers: &'a [&dyn HtmlScraper],
+) -> Option<&'a dyn HtmlScraper> {
+    scrapers
+        .iter()
+        .copied()
+        .find(|scraper| scraper.can_scrape(node))
 }
 
-/// Centralized build sequence
-fn build_match_record(raw: RawMatchData, year: &str, competition: &str) -> MatchRecord {
-    // 1. Resolve year dynamically if it was empty from the headings (common on tournament pages)
+fn plausible_year(text: &str) -> Option<String> {
+    let re_year = regex::Regex::new(r"\b(18[5-9]\d|19\d{2}|20\d{2}|2100)\b").unwrap();
+    re_year.captures(text).map(|caps| caps[0].to_string())
+}
+
+fn is_heading_node(node: &ElementRef, config: &ScraperConfig) -> bool {
+    matches!(node.value().name(), "h2" | "h3" | "h4")
+        || node
+            .value()
+            .classes()
+            .any(|class| class == config.year_header_class)
+}
+
+fn combined_node_selector(
+    config: &ScraperConfig,
+    scrapers: &[&dyn HtmlScraper],
+) -> anyhow::Result<Selector> {
+    let mut selectors = vec!["h2".to_string(), "h3".to_string(), "h4".to_string()];
+
+    if !config.year_header_class.trim().is_empty() {
+        selectors.push(format!("div.{}", config.year_header_class));
+    }
+
+    selectors.extend(
+        scrapers
+            .iter()
+            .map(|scraper| scraper.root_selector().to_string()),
+    );
+
+    if !config.event_header_class.trim().is_empty() {
+        selectors.push(format!("div.{}", config.event_header_class));
+    }
+
+    selectors.sort();
+    selectors.dedup();
+
+    Selector::parse(&selectors.join(", "))
+        .map_err(|err| anyhow::anyhow!("invalid CSS selector: {err:?}"))
+}
+
+fn build_match_record(
+    raw: RawMatchData,
+    year: &str,
+    competition: &str,
+) -> anyhow::Result<MatchRecord> {
     let mut year_val = year.to_string();
     if year_val.is_empty() {
-        let re_year = regex::Regex::new(r"\b(19\d{2}|20\d{2})\b").unwrap();
-        if let Some(caps) = re_year.captures(&raw.raw_date) {
-            year_val = caps[0].to_string();
+        if let Some(year) = plausible_year(&raw.raw_date) {
+            year_val = year;
         }
     }
 
-    // 2. Clean raw date (strip hidden parenthetical schema dates)
     let clean_date = raw
         .raw_date
         .split('(')
@@ -68,26 +136,23 @@ fn build_match_record(raw: RawMatchData, year: &str, competition: &str) -> Match
         .trim()
         .to_string();
 
-    // 3. Format full_date without duplicating year if it already exists
     let full_date = if clean_date.contains(&year_val) {
         clean_date.clone()
     } else {
         format!("{}, {}", clean_date, year_val)
     };
 
-    // 4. Clean kickoff time
     let clean_time_val = raw.raw_time.map(|t| crate::parser::text::clean_time(&t));
 
-    // 5. Centralized parsing of score and scorers lists
     let mut score_record = parse_match_score(
         &raw.raw_score,
         &raw.raw_home_team,
         &raw.raw_away_team,
         raw.raw_home_scorers.as_deref(),
         raw.raw_away_scorers.as_deref(),
+        raw.raw_shootout_score.as_deref(),
     );
 
-    // 6. Attach shootout takers if they exist
     if !raw.raw_home_shootout.is_empty() {
         score_record
             .home_mut()
@@ -108,7 +173,6 @@ fn build_match_record(raw: RawMatchData, year: &str, competition: &str) -> Match
         .score(score_record)
         .time(clean_time_val);
 
-    // 7. Clean City/Country and extract stadium fallback
     if let Some(city_raw) = raw.raw_city_country {
         let clean_city = clean_city_country(&city_raw);
         builder = builder.city_country(clean_city.clone());
@@ -119,7 +183,6 @@ fn build_match_record(raw: RawMatchData, year: &str, competition: &str) -> Match
         }
     }
 
-    // 8. Parse Stadium, Attendance, and Referee details
     if let Some(stadium_raw) = raw.raw_stadium_details {
         let (stadium, attendance, referee) = parse_stadium_details(&stadium_raw);
         if stadium.is_some() {
@@ -128,39 +191,34 @@ fn build_match_record(raw: RawMatchData, year: &str, competition: &str) -> Match
         builder = builder.attendance(attendance).referee(referee);
     }
 
-    builder.build()
+    Ok(builder.build()?)
 }
 
 pub fn scrape_matches(html: &str, config: &ScraperConfig) -> anyhow::Result<Vec<MatchRecord>> {
-    let document = Html::parse_document(html);
+    Ok(scrape_matches_with_diagnostics(html, config)?.records)
+}
 
-    // Fixed: Scopes year headers, event headers (e.g. vevent), and footballbox classes [E0425]
-    let node_selector = Selector::parse(&format!(
-        "h2, h3, h4, div.{}, div.{}, div.footballbox",
-        config.year_header_class, config.event_header_class
-    ))
-    .map_err(|err| anyhow::anyhow!("invalid CSS selector: {err:?}"))?;
+pub fn scrape_matches_with_diagnostics(
+    html: &str,
+    config: &ScraperConfig,
+) -> anyhow::Result<ScrapeReport> {
+    let document = Html::parse_document(html);
+    let footballbox_scraper = FootballBoxScraper;
+    let vevent_scraper = VeventScraper;
+    let scrapers: [&dyn HtmlScraper; 2] = [&footballbox_scraper, &vevent_scraper];
+
+    let node_selector = combined_node_selector(config, &scrapers)?;
 
     let mut records = Vec::new();
+    let mut diagnostics = ScrapeDiagnostics::default();
     let mut current_year = String::new();
     let mut current_competition = String::from("International Match");
 
-    let re_year = regex::Regex::new(r"\b(19\d{2}|20\d{2})\b").unwrap();
-
     for node in document.select(&node_selector) {
-        let tag_name = node.value().name();
-
-        if tag_name == "h2"
-            || tag_name == "h3"
-            || tag_name == "h4"
-            || node
-                .value()
-                .classes()
-                .any(|c| c == config.year_header_class)
-        {
+        if is_heading_node(&node, config) {
             let heading_text = crate::parser::clean_text(&node.text().collect::<String>());
-            if let Some(caps) = re_year.captures(&heading_text) {
-                current_year = caps[0].to_string();
+            if let Some(year) = plausible_year(&heading_text) {
+                current_year = year;
             }
             if heading_text != current_year && heading_text.len() > 4 {
                 current_competition = heading_text;
@@ -168,14 +226,26 @@ pub fn scrape_matches(html: &str, config: &ScraperConfig) -> anyhow::Result<Vec<
             continue;
         }
 
-        let scraper = get_scraper_for_node(&node);
+        let Some(scraper) = get_scraper_for_node(&node, &scrapers) else {
+            diagnostics.unsupported_nodes += 1;
+            continue;
+        };
+        diagnostics.matched_nodes += 1;
+
         if let Some(raw_data) = scraper.extract_raw_match(&node) {
-            let record = build_match_record(raw_data, &current_year, &current_competition);
-            if record.is_complete() {
-                records.push(record);
+            diagnostics.extracted_matches += 1;
+            match build_match_record(raw_data, &current_year, &current_competition) {
+                Ok(record) => records.push(record),
+                Err(_) => {
+                    diagnostics.incomplete_records += 1;
+                    diagnostics.build_failures += 1;
+                }
             }
         }
     }
 
-    Ok(records)
+    Ok(ScrapeReport {
+        records,
+        diagnostics,
+    })
 }

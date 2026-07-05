@@ -26,6 +26,10 @@ impl FootballBoxScraper {
 }
 
 impl HtmlScraper for FootballBoxScraper {
+    fn root_selector(&self) -> &'static str {
+        "div.footballbox"
+    }
+
     fn can_scrape(&self, node: &ElementRef) -> bool {
         node.value().classes().any(|c| c == "footballbox")
     }
@@ -44,6 +48,7 @@ impl HtmlScraper for FootballBoxScraper {
 
         let fhgoal_selector = Selector::parse(".fhgoal").unwrap();
         let fagoal_selector = Selector::parse(".fagoal").unwrap();
+        let header_selector = Selector::parse("th").unwrap();
 
         let location_selector = Selector::parse("div[itemprop='location']").unwrap();
         let div_selector = Selector::parse("div").unwrap();
@@ -97,11 +102,17 @@ impl HtmlScraper for FootballBoxScraper {
         // If a fourth row (shootout) is present, parse penalty takers
         let mut home_shootout = Vec::new();
         let mut away_shootout = Vec::new();
+        let mut shootout_score = None;
 
         if rows.len() >= 4 {
             if let Some(shootout_row) = rows.get(3) {
                 let home_shoot_el = shootout_row.select(&fhgoal_selector).next();
                 let away_shoot_el = shootout_row.select(&fagoal_selector).next();
+                shootout_score = shootout_row
+                    .select(&header_selector)
+                    .next()
+                    .map(|cell| element_text(&cell))
+                    .filter(|text| !text.is_empty());
 
                 if let (Some(h_shoot_cell), Some(a_shoot_cell)) = (home_shoot_el, away_shoot_el) {
                     home_shootout = parse_shootout_takers(&h_shoot_cell);
@@ -150,6 +161,7 @@ impl HtmlScraper for FootballBoxScraper {
                 None
             },
             raw_stadium_details: stadium_details,
+            raw_shootout_score: shootout_score,
             raw_home_shootout: home_shootout,
             raw_away_shootout: away_shootout,
         })
