@@ -4,20 +4,15 @@ use std::{
     path::Path,
 };
 
-use crate::{
-    config::Config, fetcher::fetch_html, models::MatchRecord, wiki_scraper::ScraperConfig,
+use sipabola_scrape_historical_data::{
+    config::Config,
+    fetcher::fetch_html,
+    models::MatchRecord,
+    wiki_scraper::{self, ScraperConfig},
 };
-
-mod config;
-mod fetcher;
-mod models;
-mod parser;
-mod wiki_scraper;
 
 const OUTPUT_PATH: &str = "out/output.json";
 
-// In src/main.rs inside fn main() -> anyhow::Result<()>
-// Inside src/main.rs inside fn main() -> anyhow::Result<()>
 fn main() -> anyhow::Result<()> {
     let config = Config::load()?;
     let html = fetch_html(&config.url)?;
@@ -27,7 +22,6 @@ fn main() -> anyhow::Result<()> {
         event_header_class: config.event_header_class,
     };
 
-    // Simply call our unified orchestrator function [E0425]
     let records = wiki_scraper::scrape_matches(&html, &scraper_config)?;
 
     write_json(&records, OUTPUT_PATH)?;
