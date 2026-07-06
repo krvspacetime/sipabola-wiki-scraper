@@ -42,3 +42,15 @@ pub(super) fn parse_shootout_takers(cell: &ElementRef) -> Vec<PenaltyShootoutTak
 
     takers
 }
+
+pub(super) fn has_configured_class(element: &ElementRef, selector: &str) -> bool {
+    let Some(class_name) = selector.rsplit('.').next() else {
+        return false;
+    };
+
+    if class_name.is_empty() || class_name.contains([' ', '>', ':', '[', '#']) {
+        return false;
+    }
+
+    element.value().classes().any(|class| class == class_name)
+}

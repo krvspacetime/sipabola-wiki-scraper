@@ -5,10 +5,7 @@ use std::{
 };
 
 use sipabola_scrape_historical_data::{
-    config::Config,
-    fetcher::fetch_html,
-    models::MatchRecord,
-    wiki_scraper::{self, ScraperConfig},
+    config::Config, fetcher::fetch_html, models::MatchRecord, wiki_scraper,
 };
 
 const OUTPUT_PATH: &str = "out/output.json";
@@ -17,12 +14,7 @@ fn main() -> anyhow::Result<()> {
     let config = Config::load()?;
     let html = fetch_html(&config.url)?;
 
-    let scraper_config = ScraperConfig {
-        year_header_class: config.year_header_class,
-        event_header_class: config.event_header_class,
-    };
-
-    let records = wiki_scraper::scrape_matches(&html, &scraper_config)?;
+    let records = wiki_scraper::scrape_matches(&html, &config.scraper_config)?;
 
     write_json(&records, OUTPUT_PATH)?;
 

@@ -1,0 +1,5 @@
+{
+  "footballbox": {
+    "time_selector": ".ftimeanddate"
+  }
+}

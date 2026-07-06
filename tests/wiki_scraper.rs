@@ -1,4 +1,7 @@
-use sipabola_scrape_historical_data::wiki_scraper::{self, ScraperConfig};
+use sipabola_scrape_historical_data::{
+    scrape_html,
+    wiki_scraper::{self, ScraperConfig},
+};
 
 fn test_config() -> ScraperConfig {
     ScraperConfig::default()
@@ -173,6 +176,7 @@ fn ignores_nodes_that_match_page_selector_but_no_registered_scraper() {
     let config = ScraperConfig {
         year_header_class: "mw-heading3".to_string(),
         event_header_class: "match-card".to_string(),
+        ..ScraperConfig::default()
     };
 
     let records = wiki_scraper::scrape_matches(html, &config).unwrap();
@@ -207,6 +211,7 @@ fn reports_basic_scrape_diagnostics() {
     let config = ScraperConfig {
         year_header_class: "mw-heading3".to_string(),
         event_header_class: "match-card".to_string(),
+        ..ScraperConfig::default()
     };
 
     let report = wiki_scraper::scrape_matches_with_diagnostics(html, &config).unwrap();
@@ -216,4 +221,77 @@ fn reports_basic_scrape_diagnostics() {
     assert_eq!(report.diagnostics.unsupported_nodes, 1);
     assert_eq!(report.diagnostics.extracted_matches, 1);
     assert_eq!(report.diagnostics.build_failures, 0);
+}
+
+#[test]
+fn public_api_scrapes_html_without_writing_json() {
+    let html = r#"
+        <html>
+          <body>
+            <h2>1983 Friendly</h2>
+            <div class="vevent">
+              <table>
+                <tbody>
+                  <tr>
+                    <td>April 14</td>
+                    <td>Philippines</td>
+                    <td>2-0</td>
+                    <td>Hong Kong</td>
+                    <td>Thailand</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </body>
+        </html>
+    "#;
+
+    let records = scrape_html(html).unwrap();
+
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].home_team(), "Philippines");
+}
+
+#[test]
+fn api_config_overrides_footballbox_time_selector() {
+    let html = r#"
+        <html>
+          <body>
+            <h2>2006 FIFA World Cup knockout stage</h2>
+            <div class="footballbox">
+              <div class="fleft">
+                <div class="fdate">30 June 2006</div>
+                <div class="ftimeanddate">17:00</div>
+              </div>
+              <table class="fevent">
+                <tbody>
+                  <tr>
+                    <th class="fhome">Germany</th>
+                    <th class="fscore">1-0</th>
+                    <th class="faway">Argentina</th>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </body>
+        </html>
+    "#;
+
+    let mut config = ScraperConfig::default();
+    config.footballbox.time_selector = ".ftimeanddate".to_string();
+
+    let records = wiki_scraper::scrape_matches(html, &config).unwrap();
+
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].time(), Some("17:00"));
+}
+
+#[test]
+fn validates_invalid_selector_overrides_early() {
+    let mut config = ScraperConfig::default();
+    config.footballbox.time_selector = "[".to_string();
+
+    let err = wiki_scraper::scrape_matches("<html></html>", &config).unwrap_err();
+
+    assert!(err.to_string().contains("invalid selector"));
 }

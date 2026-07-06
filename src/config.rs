@@ -4,28 +4,39 @@ use crate::wiki_scraper::ScraperConfig;
 
 pub struct Config {
     pub url: String,
-    pub year_header_class: String,
-    pub event_header_class: String,
+    pub scraper_config: ScraperConfig,
 }
 
 impl Config {
     pub fn load() -> anyhow::Result<Self> {
         dotenvy::dotenv().ok();
 
-        let url = std::env::args()
-            .nth(1)
-            .context("usage: wiki_scraper <wikipedia-url>")?;
+        let mut args = std::env::args().skip(1);
+        let url = args
+            .next()
+            .context("usage: wiki_scraper <wikipedia-url> [--config selectors.json]")?;
 
-        let scraper_defaults = ScraperConfig::default();
-        let year_header_class =
-            std::env::var("YEAR_HEADER_CLASS").unwrap_or(scraper_defaults.year_header_class);
-        let event_header_class =
-            std::env::var("EVENT_HEADER_CLASS").unwrap_or(scraper_defaults.event_header_class);
+        let mut scraper_config = ScraperConfig::default();
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--config" | "-c" => {
+                    let path = args
+                        .next()
+                        .context("--config requires a JSON config file path")?;
+                    let file = std::fs::File::open(&path)
+                        .with_context(|| format!("failed to open config file `{path}`"))?;
+                    scraper_config = serde_json::from_reader(file)
+                        .with_context(|| format!("failed to parse config file `{path}`"))?;
+                }
+                other => anyhow::bail!("unknown argument `{other}`"),
+            }
+        }
+
+        scraper_config.validate()?;
 
         Ok(Self {
             url,
-            year_header_class,
-            event_header_class,
+            scraper_config,
         })
     }
 }

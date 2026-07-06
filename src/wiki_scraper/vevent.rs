@@ -1,26 +1,27 @@
 // src/wiki_scraper/vevent.rs
 use super::{
-    HtmlScraper, RawMatchData,
-    dom::{element_text, non_empty_cell, parse_shootout_takers},
+    HtmlScraper, RawMatchData, ScraperConfig,
+    dom::{element_text, has_configured_class, non_empty_cell, parse_shootout_takers},
 };
 use scraper::{ElementRef, Html, Selector};
 
 pub struct VeventScraper;
 
 impl HtmlScraper for VeventScraper {
-    fn root_selector(&self) -> &'static str {
-        "div.vevent"
+    fn root_selector<'a>(&self, config: &'a ScraperConfig) -> &'a str {
+        &config.vevent.root_selector
     }
 
-    fn can_scrape(&self, node: &ElementRef) -> bool {
-        node.value().classes().any(|c| c == "vevent")
+    fn can_scrape(&self, node: &ElementRef, config: &ScraperConfig) -> bool {
+        has_configured_class(node, &config.vevent.root_selector)
     }
 
-    fn extract_raw_match(&self, node: &ElementRef) -> Option<RawMatchData> {
+    fn extract_raw_match(&self, node: &ElementRef, config: &ScraperConfig) -> Option<RawMatchData> {
         let fragment = Html::parse_fragment(&node.html());
-        let table_selector = Selector::parse("table").ok()?;
-        let row_selector = Selector::parse("tr").ok()?;
-        let cell_selector = Selector::parse("td").ok()?;
+        let selectors = &config.vevent;
+        let table_selector = Selector::parse(&selectors.table_selector).ok()?;
+        let row_selector = Selector::parse(&selectors.row_selector).ok()?;
+        let cell_selector = Selector::parse(&selectors.cell_selector).ok()?;
 
         let table = fragment.select(&table_selector).next()?;
         let rows: Vec<_> = table.select(&row_selector).collect();

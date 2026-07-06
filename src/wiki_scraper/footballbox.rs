@@ -1,7 +1,7 @@
 // src/wiki_scraper/footballbox.rs
 use super::{
-    HtmlScraper, RawMatchData,
-    dom::{element_text, parse_shootout_takers},
+    HtmlScraper, RawMatchData, ScraperConfig,
+    dom::{element_text, has_configured_class, parse_shootout_takers},
 };
 use crate::parser::clean_text;
 use regex::Regex;
@@ -26,32 +26,34 @@ impl FootballBoxScraper {
 }
 
 impl HtmlScraper for FootballBoxScraper {
-    fn root_selector(&self) -> &'static str {
-        "div.footballbox"
+    fn root_selector<'a>(&self, config: &'a ScraperConfig) -> &'a str {
+        &config.footballbox.root_selector
     }
 
-    fn can_scrape(&self, node: &ElementRef) -> bool {
-        node.value().classes().any(|c| c == "footballbox")
+    fn can_scrape(&self, node: &ElementRef, config: &ScraperConfig) -> bool {
+        has_configured_class(node, &config.footballbox.root_selector)
     }
 
-    fn extract_raw_match(&self, node: &ElementRef) -> Option<RawMatchData> {
-        let table_selector = Selector::parse("table.fevent").ok()?;
-        let row_selector = Selector::parse("tr").ok()?;
+    fn extract_raw_match(&self, node: &ElementRef, config: &ScraperConfig) -> Option<RawMatchData> {
+        let selectors = &config.footballbox;
+        let table_selector = Selector::parse(&selectors.table_selector).ok()?;
+        let row_selector = Selector::parse(&selectors.row_selector).ok()?;
 
-        let fleft_selector = Selector::parse(".fleft").unwrap();
-        let fdate_selector = Selector::parse(".fdate").unwrap();
-        let ftime_selector = Selector::parse(".ftime").unwrap();
+        let fleft_selector = Selector::parse(&selectors.left_selector).ok()?;
+        let fdate_selector = Selector::parse(&selectors.date_selector).ok()?;
+        let ftime_selector = Selector::parse(&selectors.time_selector).ok()?;
 
-        let fhome_selector = Selector::parse(".fhome").unwrap();
-        let fscore_selector = Selector::parse(".fscore").unwrap();
-        let faway_selector = Selector::parse(".faway").unwrap();
+        let fhome_selector = Selector::parse(&selectors.home_selector).ok()?;
+        let fscore_selector = Selector::parse(&selectors.score_selector).ok()?;
+        let faway_selector = Selector::parse(&selectors.away_selector).ok()?;
 
-        let fhgoal_selector = Selector::parse(".fhgoal").unwrap();
-        let fagoal_selector = Selector::parse(".fagoal").unwrap();
-        let header_selector = Selector::parse("th").unwrap();
+        let fhgoal_selector = Selector::parse(&selectors.home_goal_selector).ok()?;
+        let fagoal_selector = Selector::parse(&selectors.away_goal_selector).ok()?;
+        let header_selector = Selector::parse(&selectors.shootout_score_selector).ok()?;
 
-        let location_selector = Selector::parse("div[itemprop='location']").unwrap();
-        let div_selector = Selector::parse("div").unwrap();
+        let location_selector = Selector::parse(&selectors.location_selector).ok()?;
+        let fright_selector = Selector::parse(&selectors.details_root_selector).ok()?;
+        let div_selector = Selector::parse(&selectors.details_line_selector).ok()?;
 
         // 1. Extract Date and Time from fleft (routing fdate through parse_date_and_year to collapse whitespaces)
         let mut raw_date = String::new();
@@ -125,7 +127,6 @@ impl HtmlScraper for FootballBoxScraper {
         let mut city_country = String::new();
         let mut stadium_raw = String::new();
 
-        let fright_selector = Selector::parse(".fright").unwrap();
         if let Some(fright) = node.select(&fright_selector).next() {
             if let Some(loc) = fright.select(&location_selector).next() {
                 city_country = element_text(&loc);
