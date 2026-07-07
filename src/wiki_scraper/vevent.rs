@@ -1,8 +1,9 @@
 // src/wiki_scraper/vevent.rs
 use super::{
-    HtmlScraper, RawMatchData, ScraperConfig,
+    HtmlScraper, RawMatchData,
     dom::{element_text, has_configured_class, non_empty_cell, parse_shootout_takers},
 };
+use crate::config::ScraperConfig;
 use scraper::{ElementRef, Html, Selector};
 
 pub struct VeventScraper;

@@ -4,17 +4,14 @@ use std::{
     path::Path,
 };
 
-use sipabola_scrape_historical_data::{
-    config::Config, fetcher::fetch_html, models::MatchRecord, wiki_scraper,
-};
+use sipabola_wiki_scraper::{CliConfig, MatchRecord, SipabolaWikiScraper};
 
 const OUTPUT_PATH: &str = "out/output.json";
 
 fn main() -> anyhow::Result<()> {
-    let config = Config::load()?;
-    let html = fetch_html(&config.url)?;
-
-    let records = wiki_scraper::scrape_matches(&html, &config.scraper_config)?;
+    let config = CliConfig::load()?;
+    let scraper = SipabolaWikiScraper::with_config(config.scraper_config);
+    let records = scraper.scrape_url(&config.url)?;
 
     write_json(&records, OUTPUT_PATH)?;
 

@@ -1,8 +1,9 @@
 // src/wiki_scraper/footballbox.rs
 use super::{
-    HtmlScraper, RawMatchData, ScraperConfig,
+    HtmlScraper, RawMatchData,
     dom::{element_text, has_configured_class, parse_shootout_takers},
 };
+use crate::config::ScraperConfig;
 use crate::parser::clean_text;
 use regex::Regex;
 use scraper::{ElementRef, Selector};

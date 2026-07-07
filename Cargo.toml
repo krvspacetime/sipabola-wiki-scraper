@@ -1,5 +1,5 @@
 [package]
-name = "sipabola-scrape-historical-data"
+name = "sipabola-wiki-scraper"
 version = "0.1.0"
 edition = "2024"
 

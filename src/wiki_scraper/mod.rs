@@ -1,8 +1,8 @@
 // src/wiki_scraper/mod.rs
+use crate::config::ScraperConfig;
 use crate::models::{MatchRecord, PenaltyShootoutTaker};
 use crate::parser::{clean_city_country, parse_match_score, parse_stadium_details};
 use scraper::{ElementRef, Html, Selector};
-use serde::Deserialize;
 
 mod footballbox;
 mod vevent;
@@ -11,139 +11,6 @@ mod dom;
 
 use footballbox::FootballBoxScraper;
 use vevent::VeventScraper;
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-pub struct ScraperConfig {
-    pub year_header_class: String,
-    pub event_header_class: String,
-    pub footballbox: FootballBoxSelectors,
-    pub vevent: VeventSelectors,
-}
-
-impl Default for ScraperConfig {
-    fn default() -> Self {
-        Self {
-            year_header_class: "mw-heading3".to_string(),
-            event_header_class: "vevent".to_string(),
-            footballbox: FootballBoxSelectors::default(),
-            vevent: VeventSelectors::default(),
-        }
-    }
-}
-
-impl ScraperConfig {
-    pub fn validate(&self) -> anyhow::Result<()> {
-        let selectors = [
-            self.footballbox.root_selector.as_str(),
-            self.footballbox.table_selector.as_str(),
-            self.footballbox.row_selector.as_str(),
-            self.footballbox.left_selector.as_str(),
-            self.footballbox.date_selector.as_str(),
-            self.footballbox.time_selector.as_str(),
-            self.footballbox.home_selector.as_str(),
-            self.footballbox.score_selector.as_str(),
-            self.footballbox.away_selector.as_str(),
-            self.footballbox.home_goal_selector.as_str(),
-            self.footballbox.away_goal_selector.as_str(),
-            self.footballbox.shootout_score_selector.as_str(),
-            self.footballbox.location_selector.as_str(),
-            self.footballbox.details_root_selector.as_str(),
-            self.footballbox.details_line_selector.as_str(),
-            self.vevent.root_selector.as_str(),
-            self.vevent.table_selector.as_str(),
-            self.vevent.row_selector.as_str(),
-            self.vevent.cell_selector.as_str(),
-        ];
-
-        for selector in selectors {
-            Selector::parse(selector)
-                .map_err(|err| anyhow::anyhow!("invalid selector `{selector}`: {err:?}"))?;
-        }
-
-        if !self.year_header_class.trim().is_empty() {
-            Selector::parse(&format!("div.{}", self.year_header_class)).map_err(|err| {
-                anyhow::anyhow!(
-                    "invalid year header class `{}`: {err:?}",
-                    self.year_header_class
-                )
-            })?;
-        }
-
-        if !self.event_header_class.trim().is_empty() {
-            Selector::parse(&format!("div.{}", self.event_header_class)).map_err(|err| {
-                anyhow::anyhow!(
-                    "invalid event header class `{}`: {err:?}",
-                    self.event_header_class
-                )
-            })?;
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-pub struct FootballBoxSelectors {
-    pub root_selector: String,
-    pub table_selector: String,
-    pub row_selector: String,
-    pub left_selector: String,
-    pub date_selector: String,
-    pub time_selector: String,
-    pub home_selector: String,
-    pub score_selector: String,
-    pub away_selector: String,
-    pub home_goal_selector: String,
-    pub away_goal_selector: String,
-    pub shootout_score_selector: String,
-    pub location_selector: String,
-    pub details_root_selector: String,
-    pub details_line_selector: String,
-}
-
-impl Default for FootballBoxSelectors {
-    fn default() -> Self {
-        Self {
-            root_selector: "div.footballbox".to_string(),
-            table_selector: "table.fevent".to_string(),
-            row_selector: "tr".to_string(),
-            left_selector: ".fleft".to_string(),
-            date_selector: ".fdate".to_string(),
-            time_selector: ".ftime".to_string(),
-            home_selector: ".fhome".to_string(),
-            score_selector: ".fscore".to_string(),
-            away_selector: ".faway".to_string(),
-            home_goal_selector: ".fhgoal".to_string(),
-            away_goal_selector: ".fagoal".to_string(),
-            shootout_score_selector: "th".to_string(),
-            location_selector: "div[itemprop='location']".to_string(),
-            details_root_selector: ".fright".to_string(),
-            details_line_selector: "div".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-pub struct VeventSelectors {
-    pub root_selector: String,
-    pub table_selector: String,
-    pub row_selector: String,
-    pub cell_selector: String,
-}
-
-impl Default for VeventSelectors {
-    fn default() -> Self {
-        Self {
-            root_selector: "div.vevent".to_string(),
-            table_selector: "table".to_string(),
-            row_selector: "tr".to_string(),
-            cell_selector: "td".to_string(),
-        }
-    }
-}
 
 pub(crate) struct RawMatchData {
     pub(crate) raw_date: String,
@@ -202,12 +69,8 @@ fn plausible_year(text: &str) -> Option<String> {
     re_year.captures(text).map(|caps| caps[0].to_string())
 }
 
-fn is_heading_node(node: &ElementRef, config: &ScraperConfig) -> bool {
+fn is_heading_node(node: &ElementRef) -> bool {
     matches!(node.value().name(), "h2" | "h3" | "h4")
-        || node
-            .value()
-            .classes()
-            .any(|class| class == config.year_header_class)
 }
 
 fn combined_node_selector(
@@ -216,19 +79,11 @@ fn combined_node_selector(
 ) -> anyhow::Result<Selector> {
     let mut selectors = vec!["h2".to_string(), "h3".to_string(), "h4".to_string()];
 
-    if !config.year_header_class.trim().is_empty() {
-        selectors.push(format!("div.{}", config.year_header_class));
-    }
-
     selectors.extend(
         scrapers
             .iter()
             .map(|scraper| scraper.root_selector(config).to_string()),
     );
-
-    if !config.event_header_class.trim().is_empty() {
-        selectors.push(format!("div.{}", config.event_header_class));
-    }
 
     selectors.sort();
     selectors.dedup();
@@ -315,10 +170,6 @@ fn build_match_record(
     Ok(builder.build()?)
 }
 
-pub fn scrape_matches(html: &str, config: &ScraperConfig) -> anyhow::Result<Vec<MatchRecord>> {
-    Ok(scrape_matches_with_diagnostics(html, config)?.records)
-}
-
 pub fn scrape_matches_with_diagnostics(
     html: &str,
     config: &ScraperConfig,
@@ -338,7 +189,7 @@ pub fn scrape_matches_with_diagnostics(
     let mut current_competition = String::from("International Match");
 
     for node in document.select(&node_selector) {
-        if is_heading_node(&node, config) {
+        if is_heading_node(&node) {
             let heading_text = crate::parser::clean_text(&node.text().collect::<String>());
             if let Some(year) = plausible_year(&heading_text) {
                 current_year = year;

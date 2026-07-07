@@ -1,4 +1,4 @@
-use sipabola_scrape_historical_data::{
+use sipabola_wiki_scraper::{
     models::{MatchRecord, MatchRecordBuildError, MatchScoreRecord, TeamScoreDetail},
     parser::{parse_match_score, parse_scorers, parse_stadium_details},
 };
