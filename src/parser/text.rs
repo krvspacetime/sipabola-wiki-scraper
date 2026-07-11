@@ -1,4 +1,3 @@
-// src/parser/text.rs
 use regex::Regex;
 use std::sync::OnceLock;
 
@@ -28,7 +27,6 @@ pub fn clean_city_country(text: &str) -> String {
         .to_string()
 }
 
-/// Splits stadium name, attendance, and referee details from raw details string
 pub fn parse_stadium_details(text: &str) -> (Option<String>, Option<String>, Option<String>) {
     let text = clean_text(text);
     let mut stadium = None;
@@ -44,7 +42,6 @@ pub fn parse_stadium_details(text: &str) -> (Option<String>, Option<String>, Opt
         }
     }
 
-    // 2. Isolate Attendance from the preceding segment
     let main_part = ref_parts[0].trim();
     let att_parts: Vec<&str> = main_part.split("Attendance:").collect();
     if att_parts.len() > 1 {
@@ -54,7 +51,6 @@ pub fn parse_stadium_details(text: &str) -> (Option<String>, Option<String>, Opt
         }
     }
 
-    // 3. Isolate Stadium
     let stadium_part = att_parts[0].trim();
     let clean_stadium = if stadium_part.starts_with("Stadium:") {
         stadium_part.replacen("Stadium:", "", 1).trim().to_string()
@@ -69,7 +65,6 @@ pub fn parse_stadium_details(text: &str) -> (Option<String>, Option<String>, Opt
     (stadium, attendance, referee)
 }
 
-/// Collapses whitespace and replaces non-breaking spaces with standard spaces
 pub fn clean_time(time_str: &str) -> String {
     let normalized = time_str.replace('\u{00a0}', " ");
     normalized

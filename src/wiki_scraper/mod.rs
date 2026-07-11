@@ -1,4 +1,3 @@
-// src/wiki_scraper/mod.rs
 use crate::config::ScraperConfig;
 use crate::models::{MatchRecord, PenaltyShootoutTaker};
 use crate::parser::{clean_city_country, parse_match_score, parse_stadium_details};
@@ -43,13 +42,10 @@ pub struct ScrapeReport {
 }
 
 trait HtmlScraper {
-    /// CSS selector for nodes this scraper can parse.
     fn root_selector<'a>(&self, config: &'a ScraperConfig) -> &'a str;
 
-    /// True if the CSS selectors of this scraper match the node
     fn can_scrape(&self, node: &ElementRef, config: &ScraperConfig) -> bool;
 
-    /// Extracts raw strings from the DOM table
     fn extract_raw_match(&self, node: &ElementRef, config: &ScraperConfig) -> Option<RawMatchData>;
 }
 

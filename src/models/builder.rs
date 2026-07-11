@@ -1,4 +1,3 @@
-// src/models/builder.rs
 use super::match_record::{MatchRecord, MatchScoreRecord};
 use std::{error::Error, fmt};
 

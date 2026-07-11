@@ -1,4 +1,3 @@
-// src/wiki_scraper/footballbox.rs
 use super::{
     HtmlScraper, RawMatchData,
     dom::{element_text, has_configured_class, parse_shootout_takers},
@@ -11,7 +10,6 @@ use scraper::{ElementRef, Selector};
 pub struct FootballBoxScraper;
 
 impl FootballBoxScraper {
-    /// Safely isolates date, removes parentheticals, and extracts the year
     fn parse_date_and_year(&self, cell: &ElementRef) -> (String, String) {
         let text = clean_text(&cell.text().collect::<String>());
         let date_clean = text.split('(').next().unwrap_or("").trim().to_string();
