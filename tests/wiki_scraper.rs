@@ -36,7 +36,7 @@ fn scrapes_vevent_match_fixture() {
         </html>
     "#;
 
-    let records = test_scraper().scrape_html(html).unwrap();
+    let records = test_scraper().scrape_raw_html(html).unwrap();
 
     assert_eq!(records.len(), 1);
     let record = &records[0];
@@ -121,7 +121,7 @@ fn scrapes_footballbox_match_fixture() {
         </html>
     "#;
 
-    let records = test_scraper().scrape_html(html).unwrap();
+    let records = test_scraper().scrape_raw_html(html).unwrap();
 
     assert_eq!(records.len(), 1);
     let record = &records[0];
@@ -172,7 +172,7 @@ fn ignores_nodes_that_match_page_selector_but_no_registered_scraper() {
         </html>
     "#;
 
-    let records = test_scraper().scrape_html(html).unwrap();
+    let records = test_scraper().scrape_raw_html(html).unwrap();
 
     assert!(records.is_empty());
 }
@@ -233,7 +233,7 @@ fn public_api_scrapes_html_without_writing_json() {
         </html>
     "#;
 
-    let records = SipabolaWikiScraper::new().scrape_html(html).unwrap();
+    let records = SipabolaWikiScraper::new().scrape_raw_html(html).unwrap();
 
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].home_team(), "Philippines");
@@ -270,7 +270,7 @@ fn api_config_overrides_footballbox_time_selector() {
     );
 
     let records = SipabolaWikiScraper::with_config(config)
-        .scrape_html(html)
+        .scrape_raw_html(html)
         .unwrap();
 
     assert_eq!(records.len(), 1);
@@ -282,7 +282,7 @@ fn validates_invalid_selector_overrides_early() {
     let config = ScraperConfig::new().footballbox_time_selector("[");
 
     let err = SipabolaWikiScraper::with_config(config)
-        .scrape_html("<html></html>")
+        .scrape_raw_html("<html></html>")
         .unwrap_err();
 
     assert!(err.to_string().contains("invalid selector"));
