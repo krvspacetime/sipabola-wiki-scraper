@@ -1,11 +1,17 @@
-use sipabola_wiki_scraper::{CliConfig, RecordWriter, SipabolaWikiScraper};
+use sipabola_wiki_scraper::{CliArgs, RecordsWriter, SipabolaWikiScraper};
 
 fn main() -> anyhow::Result<()> {
-    let config = CliConfig::load()?;
-    let scraper = SipabolaWikiScraper::with_config(config.scraper_config);
-    let records = scraper.scrape_url(&config.url)?;
+    dotenvy::dotenv().ok();
+    let args = CliArgs::args()?;
 
-    RecordWriter::write_json(&records, "out/records.json")?;
+    let scraper = if let Some(config) = args.scraper_config {
+        SipabolaWikiScraper::with_config(config)
+    } else {
+        SipabolaWikiScraper::new()
+    };
+
+    let records = scraper.scrape_url(&args.url)?;
+    RecordsWriter::write_json(&records, "out/records.json")?;
 
     Ok(())
 }

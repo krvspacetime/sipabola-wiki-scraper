@@ -1,22 +1,20 @@
+use crate::config::{ScraperConfig, ScraperConfigOverrides};
 use anyhow::{Context, bail};
 
-use crate::config::{ScraperConfig, ScraperConfigOverrides};
-
-pub struct CliConfig {
+pub struct CliArgs {
     pub url: String,
-    pub scraper_config: ScraperConfig,
+    pub scraper_config: Option<ScraperConfig>,
 }
 
-impl CliConfig {
-    pub fn load() -> anyhow::Result<Self> {
-        dotenvy::dotenv().ok();
-
+impl CliArgs {
+    pub fn args() -> anyhow::Result<Self> {
         let mut args = std::env::args().skip(1);
         let url = args
             .next()
             .context("usage: wiki_scraper <wikipedia-url> [--config selectors.json]")?;
 
-        let mut overrides = ScraperConfigOverrides::default();
+        let mut scraper_config = None;
+
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--config" | "-c" => {
@@ -25,15 +23,16 @@ impl CliConfig {
                         .context("--config requires a JSON config file path")?;
                     let file = std::fs::File::open(&path)
                         .with_context(|| format!("failed to open config file `{path}`"))?;
-                    overrides = serde_json::from_reader(file)
+                    let overrides: ScraperConfigOverrides = serde_json::from_reader(file)
                         .with_context(|| format!("failed to parse config file `{path}`"))?;
+
+                    let config = ScraperConfig::new().with_overrides(overrides);
+                    config.validate()?;
+                    scraper_config = Some(config);
                 }
                 other => bail!("unknown argument `{other}`"),
             }
         }
-
-        let scraper_config = ScraperConfig::new().with_overrides(overrides);
-        scraper_config.validate()?;
 
         Ok(Self {
             url,

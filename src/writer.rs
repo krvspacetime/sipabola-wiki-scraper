@@ -6,9 +6,9 @@ use std::{
 
 use crate::MatchRecord;
 
-pub struct RecordWriter;
+pub struct RecordsWriter;
 
-impl RecordWriter {
+impl RecordsWriter {
     pub fn write_json(records: &[MatchRecord], path: &str) -> anyhow::Result<()> {
         let path = Path::new(path);
         if let Some(parent) = path.parent() {
