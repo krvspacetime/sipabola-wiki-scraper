@@ -1,8 +1,7 @@
 use anyhow::Context;
 use argh::FromArgs;
+use sipabola_wiki_scraper::{ScraperConfig, ScraperConfigOverrides};
 use std::path::PathBuf;
-
-use crate::config::{ScraperConfig, ScraperConfigOverrides};
 
 #[derive(FromArgs)]
 /// Sipabola Wiki Scraper CLI

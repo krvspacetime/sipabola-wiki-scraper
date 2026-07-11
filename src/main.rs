@@ -1,4 +1,7 @@
-use sipabola_wiki_scraper::{CliArgs, RecordsWriter, SipabolaWikiScraper};
+use cli::CliArgs;
+use sipabola_wiki_scraper::{RecordsWriter, SipabolaWikiScraper};
+
+mod cli;
 
 fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
