@@ -34,7 +34,7 @@ impl SipabolaWikiScraper {
         wiki_scraper::scrape_matches_with_diagnostics(html, &self.config)
     }
 
-    pub fn scrape_html_file<P: AsRef<Path>>(&self, path: P) -> anyhow::Result<Vec<MatchRecord>> {
+    pub fn scrape_html_file(&self, path: impl AsRef<Path>) -> anyhow::Result<Vec<MatchRecord>> {
         let path = path.as_ref();
 
         let html = std::fs::read_to_string(path)?;
