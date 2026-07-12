@@ -116,8 +116,78 @@ impl FootballBoxOverrides {
         Self::default()
     }
 
+    pub fn root_selector(mut self, selector: impl Into<String>) -> Self {
+        self.root_selector = Some(selector.into());
+        self
+    }
+
+    pub fn table_selector(mut self, selector: impl Into<String>) -> Self {
+        self.table_selector = Some(selector.into());
+        self
+    }
+
+    pub fn row_selector(mut self, selector: impl Into<String>) -> Self {
+        self.row_selector = Some(selector.into());
+        self
+    }
+
+    pub fn left_selector(mut self, selector: impl Into<String>) -> Self {
+        self.left_selector = Some(selector.into());
+        self
+    }
+
+    pub fn date_selector(mut self, selector: impl Into<String>) -> Self {
+        self.date_selector = Some(selector.into());
+        self
+    }
+
     pub fn time_selector(mut self, selector: impl Into<String>) -> Self {
         self.time_selector = Some(selector.into());
+        self
+    }
+
+    pub fn home_selector(mut self, selector: impl Into<String>) -> Self {
+        self.home_selector = Some(selector.into());
+        self
+    }
+
+    pub fn score_selector(mut self, selector: impl Into<String>) -> Self {
+        self.score_selector = Some(selector.into());
+        self
+    }
+
+    pub fn away_selector(mut self, selector: impl Into<String>) -> Self {
+        self.away_selector = Some(selector.into());
+        self
+    }
+
+    pub fn home_goal_selector(mut self, selector: impl Into<String>) -> Self {
+        self.home_goal_selector = Some(selector.into());
+        self
+    }
+
+    pub fn away_goal_selector(mut self, selector: impl Into<String>) -> Self {
+        self.away_goal_selector = Some(selector.into());
+        self
+    }
+
+    pub fn shootout_score_selector(mut self, selector: impl Into<String>) -> Self {
+        self.shootout_score_selector = Some(selector.into());
+        self
+    }
+
+    pub fn location_selector(mut self, selector: impl Into<String>) -> Self {
+        self.location_selector = Some(selector.into());
+        self
+    }
+
+    pub fn details_root_selector(mut self, selector: impl Into<String>) -> Self {
+        self.details_root_selector = Some(selector.into());
+        self
+    }
+
+    pub fn details_line_selector(mut self, selector: impl Into<String>) -> Self {
+        self.details_line_selector = Some(selector.into());
         self
     }
 }
@@ -134,6 +204,26 @@ pub struct VeventOverrides {
 impl VeventOverrides {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn root_selector(mut self, selector: impl Into<String>) -> Self {
+        self.root_selector = Some(selector.into());
+        self
+    }
+
+    pub fn table_selector(mut self, selector: impl Into<String>) -> Self {
+        self.table_selector = Some(selector.into());
+        self
+    }
+
+    pub fn row_selector(mut self, selector: impl Into<String>) -> Self {
+        self.row_selector = Some(selector.into());
+        self
+    }
+
+    pub fn cell_selector(mut self, selector: impl Into<String>) -> Self {
+        self.cell_selector = Some(selector.into());
+        self
     }
 }
 

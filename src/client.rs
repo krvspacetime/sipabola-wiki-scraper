@@ -23,10 +23,10 @@ impl SipabolaWikiScraper {
 
     pub fn scrape_url(&self, url: &str) -> anyhow::Result<Vec<MatchRecord>> {
         let html = fetch_html(url)?;
-        self.scrape_raw_html(&html)
+        self.scrape_html(&html)
     }
 
-    pub fn scrape_raw_html(&self, html: &str) -> anyhow::Result<Vec<MatchRecord>> {
+    pub fn scrape_html(&self, html: &str) -> anyhow::Result<Vec<MatchRecord>> {
         Ok(self.scrape_html_with_diagnostics(html)?.records)
     }
 
@@ -39,6 +39,6 @@ impl SipabolaWikiScraper {
 
         let html = std::fs::read_to_string(path)?;
 
-        self.scrape_raw_html(&html)
+        self.scrape_html(&html)
     }
 }

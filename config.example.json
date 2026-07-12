@@ -1,5 +1,5 @@
 {
   "footballbox": {
-    "time_selector": ".ftimeanddate"
+    "root_selector": ".ftimeanddate"
   }
 }
