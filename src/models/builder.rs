@@ -65,11 +65,6 @@ impl MatchRecordBuilder {
         self
     }
 
-    pub fn status(mut self, value: impl Into<String>) -> Self {
-        self.record.status = value.into();
-        self
-    }
-
     pub fn city_country(mut self, value: impl Into<String>) -> Self {
         self.record.city_country = value.into();
         self

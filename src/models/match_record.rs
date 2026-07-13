@@ -183,7 +183,6 @@ pub struct MatchRecord {
     pub(super) home_team: String,
     pub(super) away_team: String,
     pub(super) score: MatchScoreRecord,
-    pub(super) status: String,
     pub(super) city_country: String,
     pub(super) stadium: Option<String>,
     pub(super) attendance: Option<String>,
@@ -217,9 +216,7 @@ impl MatchRecord {
     pub fn score(&self) -> &MatchScoreRecord {
         &self.score
     }
-    pub fn status(&self) -> &str {
-        &self.status
-    }
+
     pub fn city_country(&self) -> &str {
         &self.city_country
     }
