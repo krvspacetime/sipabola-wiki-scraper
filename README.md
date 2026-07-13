@@ -45,18 +45,7 @@ If the class "vevent" and "footballbox" wraps the details table, it will probabl
 ```
 
 ## Potential Issues
-If the class name changes you can override them using the API if you're using the library or a create a json config file if you're using the cli. If the structure changes though, I can't gurantee if everything will still work. Report the issue or open a PR in those cases.
-
-Example config override using the cli.
-```json
-{
-  "footballbox": {
-    "time_selector": ".ftimeanddate"
-  }
-}
-```
-
-Using the library.
+If the class name changes you can override them, especially the root selector. If the overall DOM structure changes though in conjuction with the class name changes, I can't gurantee everything will still work without code updates. For those cases open an issue/PR.
 
 ```rust
 use sipabola_wiki_scraper::{
@@ -65,7 +54,7 @@ use sipabola_wiki_scraper::{
 
 let config = ScraperConfig::new()
     .with_overrides(ScraperConfigOverrides::new().footballbox(
-        FootballBoxOverrides::new().time_selector(".ftimeanddate"),
+        FootballBoxOverrides::new().root_selector(".footballboxnew"),
     ));
 
 let scraper = SipabolaWikiScraper::with_config(config);
@@ -73,10 +62,16 @@ let records = scraper.scrape_url("https://en.wikipedia.org/wiki/...")?;
 
 ```
 
-## Use Cases
-I personally used this tool to create a database for a project. I didn't want to pay for any subscription or API keys so this is what I used. Feel free to use it however you see fit.
-
-## Library
+If you're using the cli, you can create a config file as pass it via the --config flag.
+```json
+{
+  "footballbox": {
+    "root_selector": "footballboxnew",
+    "time_selector": ".ftimeanddate"
+  }
+}
+```
+## Library API
 
 Use the client API. It returns `Vec<MatchRecord>` and does not write JSON or touch the filesystem.
 
@@ -102,9 +97,52 @@ Or if you have the html file.
 let records = scraper.scrape_html_file("path/to/file.html")?;
 ```
 
-## Selector Overrides
+## Output
+JSON output after running cli on the 2026 World Cup Wikipedia page.
 
-Selector overrides are for small Wikipedia class/selector changes inside a supported DOM structure. They are not meant to support a completely new match layout.
+```json
+[
+  {
+    "raw_date": "June 28, 2026",
+    "year": "2026",
+    "full_date": "June 28, 2026",
+    "competition": "Round of 32",
+    "home_team": "South Africa",
+    "away_team": "Canada",
+    "score": {
+      "raw": "0–1",
+      "home": {
+        "team_name": "South Africa",
+        "total_goals": 0,
+        "scorers": [],
+        "penalty_shootout_goals": null,
+        "shootout_takers": []
+      },
+      "away": {
+        "team_name": "Canada",
+        "total_goals": 1,
+        "scorers": [
+          {
+            "scorer": "Eustáquio",
+            "minute": "90+2",
+            "is_penalty": false,
+            "is_own_goal": false
+          }
+        ],
+        "penalty_shootout_goals": null,
+        "shootout_takers": []
+      },
+      "extra_time": false,
+      "is_cancelled": false,
+      "is_postponed": false
+    },
+    "city_country": "SoFi Stadium, Inglewood",
+    "stadium": "SoFi Stadium",
+    "attendance": "69,237",
+    "time": "12:00 p.m. UTC−7",
+    "referee": "João Pinheiro (Portugal)"
+  },
+```
 
 ## CLI
 
@@ -118,16 +156,6 @@ Run with a partial JSON config:
 
 ```powershell
 cargo run -- "https://en.wikipedia.org/wiki/..." --config config.example.json
-```
-
-Example config:
-
-```json
-{
-  "footballbox": {
-    "time_selector": ".ftimeanddate"
-  }
-}
 ```
 
 The CLI writes JSON to `out/records.json` by default but can be specified using the --output flag.
