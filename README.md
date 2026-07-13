@@ -13,7 +13,7 @@ Scrape football match records from Wikipedia pages that use common football matc
 [Norway Men's Foothball Team Results from 2020-Present](https://en.wikipedia.org/wiki/Norway_national_football_team_results_(2020%E2%80%93present))
 
 ## Selectors
-If the class "vevent" and "footballbox" wraps the details table, it will probably work.
+If the class "vevent" and "footballbox" wraps the details table, it will probably work. Currently those are the only two structures supported, if you find another type of structure with different class names, open an issue or PR.
 
 ```html
 <div

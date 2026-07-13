@@ -1,5 +1,11 @@
 {
   "footballbox": {
-    "root_selector": ".ftimeanddate"
+    "root_selector": ".footballboxnew",
+    "time_selector": ".ftimeanddate .time",
+    "date_selector": ".ftimeanddate .date"
+  },
+  "vevent": {
+    "root_selector": ".veventnew",
+    "time_selector": "vevent_time"
   }
 }
