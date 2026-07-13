@@ -4,8 +4,6 @@ use sipabola_wiki_scraper::{RecordsWriter, SipabolaWikiScraper};
 mod cli;
 
 fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
-
     let args = CliArgs::args()?;
     let CliArgs {
         url,
