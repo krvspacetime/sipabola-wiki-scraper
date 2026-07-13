@@ -103,44 +103,85 @@ JSON output after running cli on the 2026 World Cup Wikipedia page.
 ```json
 [
   {
-    "raw_date": "June 28, 2026",
+    "raw_date": "July 3, 2026",
     "year": "2026",
-    "full_date": "June 28, 2026",
+    "full_date": "July 3, 2026",
     "competition": "Round of 32",
-    "home_team": "South Africa",
-    "away_team": "Canada",
+    "home_team": "Australia",
+    "away_team": "Egypt",
     "score": {
-      "raw": "0–1",
+      "raw": "1–1  ( a.e.t. )",
       "home": {
-        "team_name": "South Africa",
-        "total_goals": 0,
-        "scorers": [],
-        "penalty_shootout_goals": null,
-        "shootout_takers": []
-      },
-      "away": {
-        "team_name": "Canada",
+        "team_name": "Australia",
         "total_goals": 1,
         "scorers": [
           {
-            "scorer": "Eustáquio",
-            "minute": "90+2",
+            "scorer": "Hany",
+            "minute": "55",
+            "is_penalty": false,
+            "is_own_goal": true
+          }
+        ],
+        "penalty_shootout_goals": 2,
+        "shootout_takers": [
+          {
+            "taker": "Souttar",
+            "is_scored": false
+          },
+          {
+            "taker": "Irvine",
+            "is_scored": true
+          },
+          {
+            "taker": "Mabil",
+            "is_scored": true
+          },
+          {
+            "taker": "Herrington",
+            "is_scored": false
+          }
+        ]
+      },
+      "away": {
+        "team_name": "Egypt",
+        "total_goals": 1,
+        "scorers": [
+          {
+            "scorer": "Ashour",
+            "minute": "13",
             "is_penalty": false,
             "is_own_goal": false
           }
         ],
-        "penalty_shootout_goals": null,
-        "shootout_takers": []
+        "penalty_shootout_goals": 4,
+        "shootout_takers": [
+          {
+            "taker": "Saber",
+            "is_scored": true
+          },
+          {
+            "taker": "Rabia",
+            "is_scored": true
+          },
+          {
+            "taker": "Salah",
+            "is_scored": true
+          },
+          {
+            "taker": "Abdelmaguid",
+            "is_scored": true
+          }
+        ]
       },
-      "extra_time": false,
+      "extra_time": true,
       "is_cancelled": false,
       "is_postponed": false
     },
-    "city_country": "SoFi Stadium, Inglewood",
-    "stadium": "SoFi Stadium",
-    "attendance": "69,237",
-    "time": "12:00 p.m. UTC−7",
-    "referee": "João Pinheiro (Portugal)"
+    "city_country": "AT&T Stadium, Arlington",
+    "stadium": "AT&T Stadium",
+    "attendance": "70,244",
+    "time": "1:00 p.m. UTC−5",
+    "referee": "Gustavo Tejera (Uruguay)"
   },
 ```
 
